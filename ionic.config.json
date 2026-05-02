@@ -1,0 +1,7 @@
+{
+  "name": "docvault",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}
