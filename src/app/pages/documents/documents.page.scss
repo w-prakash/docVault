@@ -1,0 +1,349 @@
+/* 🌈 Background */
+.doc-bg {
+  --background: linear-gradient(135deg, #6a11cb, #2575fc);
+}
+
+/* 🔷 Header */
+.header {
+  color: white;
+  padding: 16px;
+
+  h2 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  p {
+    opacity: 0.8;
+    margin: 4px 0 0;
+  }
+}
+
+/* 📦 Grid Layout */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 12px;
+}
+
+/* 📄 File Card */
+.file-card {
+  background: white;
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  transition: transform 0.15s ease;
+}
+
+.file-card:active {
+  transform: scale(0.97);
+}
+
+/* 🖼 Thumbnail */
+.thumb {
+  position: relative;
+  height: 140px;
+  background: #f2f2f2;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ⚙️ Menu Button */
+.menu-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    background: rgb(100 101 103 / 71%);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.top-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  padding: 4px;
+  display: flex;
+  justify-content: flex-end;
+
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.5),
+    transparent
+  );
+}
+
+.top-bar ion-icon {
+  color: white;
+}
+.menu-btn ion-icon {
+  color: white;
+  font-size: 18px;
+}
+
+/* 📌 PDF Badge */
+.pdf-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: #e53935;
+  color: white;
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+/* 📋 Metadata */
+.meta {
+  padding: 8px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: #333;
+}
+
+.sub {
+  font-size: 12px;
+  color: #666;
+  margin: 2px 0;
+}
+
+/* ⏳ Skeleton Loader */
+.skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    #e0e0e0 25%,
+    #f0f0f0 50%,
+    #e0e0e0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 🔍 Preview Modal */
+.preview-content {
+  --background: black;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.zoom-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.zoom-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.preview-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+.filters {
+  padding: 0 12px 10px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+
+.chip {
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: none;
+  background: white;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: 0.2s;
+  color: grey;
+}
+
+.chip.active {
+  background: #2575fc;
+  color: white;
+  font-weight: 500;
+}
+.sticky-filters {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #6a11cb; // match your theme
+  padding-bottom: 8px;
+}
+.suggestions {
+  background: white;
+  border-radius: 8px;
+  margin: 0 12px;
+  padding: 6px;
+  color: grey;
+}
+
+.suggestion-item {
+  padding: 6px;
+  font-size: 14px;
+}
+
+.suggestion-item:hover {
+  background: #eee;
+}
+.highlight {
+  background: yellow;
+  color: black;
+  font-weight: bold;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.pdf-preview {
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #ff6a00, #ee0979);
+  color: white;
+}
+
+.pdf-preview ion-icon {
+  font-size: 40px;
+}
+
+.pdf-preview p {
+  font-size: 12px;
+}
+
+.overlay-actions {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+
+  display: flex;
+  gap: 6px;
+
+  background: rgba(0,0,0,0.6);
+  border-radius: 20px;
+  padding: 2px 6px;
+}
+
+.overlay-actions ion-button {
+  color: white;
+}
+.overlay-actions {
+  opacity: 0;
+  transition: 0.2s;
+}
+
+.file-card:hover .overlay-actions {
+  opacity: 1;
+}
+.custom-toolbar {
+  --background: linear-gradient(135deg, #6a11cb, #2575fc);
+  --color: white;
+}
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back-btn {
+  color: white;
+}
+
+.back-btn ion-icon {
+  font-size: 22px;
+}
+
+.file-card {
+  transition: all 0.3s ease;
+}
+
+/* 🔥 delete animation */
+.file-card.deleting {
+  opacity: 0;
+  transform: translateX(50px) scale(0.95);
+}
+
+.file-card.deleting {
+  opacity: 0;
+  transform: translateX(50px) scale(0.9);
+}
+
+.file-card {
+  transition: all 0.3s ease;
+}
+
+/* delete animation */
+.file-card.deleting {
+  opacity: 0;
+  transform: translateX(50px) scale(0.9);
+}
+
+/* 🔥 restore animation */
+.file-card.restoring {
+  animation: restoreAnim 0.4s ease;
+}
+
+@keyframes restoreAnim {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-5px) scale(1.03);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+/* 🔥 restore glow effect */
+.file-card.restoring {
+  animation: restoreAnim 0.4s ease, glowPulse 0.6s ease;
+}
+
+/* subtle glow */
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(14, 210, 11, 0.848);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(0, 252, 50, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(74, 198, 87, 0.726);
+  }
+}

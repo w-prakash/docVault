@@ -1,0 +1,32 @@
+<ion-content class="login-bg">
+
+  <!-- Top Shape -->
+  <div class="top-shape">
+    <h2>Welcome Back,</h2>
+    <h1>Log In!</h1>
+  </div>
+
+  <!-- Card -->
+  <div class="card">
+
+    <ion-item lines="none" class="input">
+      <ion-input placeholder="Email Address" [(ngModel)]="email"></ion-input>
+    </ion-item>
+
+    <ion-item lines="none" class="input">
+      <ion-input type="password" placeholder="Password" [(ngModel)]="password"></ion-input>
+    </ion-item>
+
+    <div class="row">
+      <ion-checkbox></ion-checkbox>
+      <span>Remember me</span>
+      <span class="forgot">Forgot password?</span>
+    </div>
+
+    <ion-button expand="block" class="login-btn" (click)="login()">
+      Log In
+    </ion-button>
+
+  </div>
+
+</ion-content>

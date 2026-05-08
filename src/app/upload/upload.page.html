@@ -1,0 +1,83 @@
+<ion-content class="upload-bg">
+
+  <!-- Header -->
+<div class="header">
+
+  <div class="header-top">
+    <ion-button fill="clear" class="back-btn" (click)="goBack()">
+      <ion-icon name="arrow-back"></ion-icon>
+    </ion-button>
+
+    <div>
+      <h2>Upload Document</h2>
+      <p>Add new file to DocVault</p>
+    </div>
+  </div>
+
+</div>
+
+  <!-- Card -->
+  <div class="card">
+
+    <!-- Person -->
+    <ion-item lines="none" class="input">
+      <ion-label>Person</ion-label>
+<ion-select [(ngModel)]="selectedMemberId" interface="alert">
+  <ion-select-option *ngFor="let m of members" [value]="m.id">
+    {{ m.name }}
+  </ion-select-option>
+</ion-select>
+    </ion-item>
+
+    <!-- Category -->
+    <ion-item lines="none" class="input">
+      <ion-label>Category</ion-label>
+     <ion-item lines="none" class="input">
+  <ion-label>Category</ion-label>
+  <ion-select [(ngModel)]="selectedCategoryId" (ionChange)="onCategoryChange()">
+    <ion-select-option *ngFor="let c of categories" [value]="c.id">
+      {{ c.name }}
+    </ion-select-option>
+  </ion-select>
+</ion-item>
+    </ion-item>
+
+    <!-- Type -->
+<ion-item lines="none" class="input" *ngIf="types.length > 0">
+  <ion-label>Type</ion-label>
+  <ion-select [(ngModel)]="selectedTypeId">
+    <ion-select-option *ngFor="let t of types" [value]="t.id">
+      {{ t.name }}
+    </ion-select-option>
+  </ion-select>
+</ion-item>
+
+    <!-- Selected files -->
+    <div *ngIf="selectedFileNames.length > 0" class="file-list">
+      <p *ngFor="let name of selectedFileNames">
+        📄 {{ name }}
+      </p>
+    </div>
+
+    <!-- Hidden file input -->
+    <input 
+      type="file" 
+      multiple 
+      hidden 
+      #fileInput 
+      (change)="onFilesSelected($event)"
+    >
+
+    <!-- SINGLE BUTTON -->
+    <ion-button expand="block" class="select-btn" (click)="openOptions(fileInput)">
+      📎 Select File
+    </ion-button>
+
+    <!-- Upload -->
+    <ion-button expand="block" class="upload-btn" (click)="upload()">
+      Upload
+    </ion-button>
+
+  </div>
+
+</ion-content>

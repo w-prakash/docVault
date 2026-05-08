@@ -1,0 +1,96 @@
+.upload-bg {
+  --background: linear-gradient(135deg, #6a11cb, #2575fc);
+  padding: 20px;
+  color: white;
+}
+
+/* Header */
+.header {
+  margin-top: 20px;
+  margin-bottom: 30px;
+
+  h2 {
+    font-size: 24px;
+    font-weight: bold;
+  }
+
+  p {
+    opacity: 0.8;
+  }
+}
+
+/* Glass card */
+.card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+/* Inputs */
+.input {
+  margin-bottom: 15px;
+  border-radius: 10px;
+  --background: rgba(255, 255, 255, 0.2);
+  --color: #fff;
+}
+
+/* Select button */
+.select-btn {
+  margin-top: 10px;
+  --background: rgba(255,255,255,0.3);
+  color: white;
+  border-radius: 12px;
+}
+
+/* Upload button */
+.upload-btn {
+  margin-top: 15px;
+  --background: linear-gradient(135deg, #ffffff, #dfe9f3);
+  color: #333;
+  font-weight: bold;
+  border-radius: 12px;
+}
+ion-select {
+  color: #fff !important;
+}
+
+ion-select::part(text) {
+  color: #fff !important;
+}
+
+/* Fix ion-select alert text visibility */
+
+ion-alert {
+  --background: #1e1e1e;
+  --color: #ffffff;
+}
+
+ion-alert .alert-radio-label {
+  color: #ffffff !important;
+}
+
+ion-alert .alert-button {
+  color: #4da3ff !important;
+}
+
+.file-list {
+  margin: 10px 0;
+  font-size: 13px;
+  color: white;
+  opacity: 0.9;
+}
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back-btn {
+  color: white;
+}
+
+.back-btn ion-icon {
+  font-size: 22px;
+}

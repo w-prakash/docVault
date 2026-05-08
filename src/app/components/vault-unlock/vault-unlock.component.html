@@ -1,0 +1,19 @@
+<div class="vault-modal">
+  <h2>Unlock Vault</h2>
+  <p>Enter your vault password to access encrypted files.</p>
+
+  <ion-item>
+    <ion-input
+      type="password"
+      [(ngModel)]="password"
+      placeholder="Enter password"
+    ></ion-input>
+  </ion-item>
+
+  <p class="error" *ngIf="error">{{ error }}</p>
+
+  <div class="actions">
+    <ion-button (click)="unlock()">Unlock</ion-button>
+    <ion-button fill="clear" (click)="cancel()">Cancel</ion-button>
+  </div>
+</div>
