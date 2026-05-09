@@ -1,19 +1,67 @@
 <div class="vault-modal">
-  <h2>Unlock Vault</h2>
-  <p>Enter your vault password to access encrypted files.</p>
 
-  <ion-item>
+  <div class="lock-icon">
+    🔒
+  </div>
+
+  <h2>Unlock Vault</h2>
+
+  <p>
+    Enter your vault password
+    to access encrypted files.
+  </p>
+
+  <ion-item lines="none">
+
     <ion-input
-      type="password"
+      [type]="showPassword ? 'text' : 'password'"
       [(ngModel)]="password"
-      placeholder="Enter password"
-    ></ion-input>
+      placeholder="Enter password">
+
+    </ion-input>
+
+    <ion-button
+      fill="clear"
+      slot="end"
+      class="eye-btn"
+      (click)="showPassword = !showPassword">
+
+      <ion-icon
+        [name]="showPassword ? 'eye-off-outline' : 'eye-outline'">
+      </ion-icon>
+
+    </ion-button>
+
   </ion-item>
 
-  <p class="error" *ngIf="error">{{ error }}</p>
+  <p class="error" *ngIf="error">
+    {{ error }}
+  </p>
 
   <div class="actions">
-    <ion-button (click)="unlock()">Unlock</ion-button>
-    <ion-button fill="clear" (click)="cancel()">Cancel</ion-button>
+
+<ion-button
+  (click)="unlock()"
+  [disabled]="isUnlocking">
+
+  <ion-spinner
+    *ngIf="isUnlocking"
+    name="crescent"
+    slot="start">
+  </ion-spinner>
+
+  {{ isUnlocking ? 'Unlocking...' : 'Unlock' }}
+
+</ion-button>
+
+    <ion-button
+      fill="clear"
+      (click)="cancel()">
+
+      Cancel
+
+    </ion-button>
+
   </div>
+
 </div>

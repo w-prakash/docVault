@@ -1,83 +1,229 @@
-<ion-content class="upload-bg">
+<ion-content class="app-bg">
 
-  <!-- Header -->
-<div class="header">
+  <div class="page-container">
 
-  <div class="header-top">
-    <ion-button fill="clear" class="back-btn" (click)="goBack()">
-      <ion-icon name="arrow-back"></ion-icon>
-    </ion-button>
+    <!-- HEADER -->
+    <div class="upload-header">
 
-    <div>
-      <h2>Upload Document</h2>
-      <p>Add new file to DocVault</p>
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="arrow-back-outline"></ion-icon>
+      </ion-button>
+
+      <div>
+        <h2>Upload Document</h2>
+        <p>Add encrypted files securely</p>
+      </div>
+
     </div>
+
+    <!-- UPLOAD CARD -->
+    <div class="glass-card upload-card">
+
+      <!-- PERSON -->
+      <div class="section-label">
+        Person
+      </div>
+
+      <ion-item lines="none" class="app-input">
+        <ion-select   #memberSelect
+
+          [(ngModel)]="selectedMemberId"
+          interface="action-sheet"
+          placeholder="Select Person">
+
+          <ion-select-option
+            *ngFor="let m of members"
+            [value]="m.id">
+
+            {{ m.name }}
+
+          </ion-select-option>
+
+        </ion-select>
+      </ion-item>
+
+      <!-- CATEGORY -->
+      <div class="section-label">
+        Category
+      </div>
+
+      <ion-item lines="none" class="app-input">
+
+        <ion-select
+          [(ngModel)]="selectedCategoryId"
+          (ionChange)="onCategoryChange()"
+          interface="action-sheet"
+          placeholder="Select Category">
+
+          <ion-select-option
+            *ngFor="let c of categories"
+            [value]="c.id">
+
+            {{ c.name }}
+
+          </ion-select-option>
+
+        </ion-select>
+
+      </ion-item>
+
+      <!-- TYPE -->
+      <div class="section-label" *ngIf="types.length > 0">
+        Type
+      </div>
+
+      <ion-item
+        lines="none"
+        class="app-input"
+        *ngIf="types.length > 0">
+
+        <ion-select
+          [(ngModel)]="selectedTypeId"
+          interface="action-sheet"
+          placeholder="Select Type">
+
+          <ion-select-option
+            *ngFor="let t of types"
+            [value]="t.id">
+
+            {{ t.name }}
+
+          </ion-select-option>
+
+        </ion-select>
+
+      </ion-item>
+
+      <!-- FILE PREVIEW -->
+<!-- FILE PREVIEW -->
+
+<div
+  class="selected-files"
+  *ngIf="selectedFileNames.length > 0">
+
+<!-- FILE PREVIEW -->
+
+<div
+  class="preview-grid"
+  *ngIf="selectedFilesPreview.length > 0">
+
+  <div
+    class="preview-card"
+    *ngFor="
+      let file of selectedFilesPreview;
+      let i = index
+    ">
+
+    <!-- IMAGE -->
+
+    <img
+      *ngIf="file.type.startsWith('image/')"
+      [src]="file.url"
+      (click)="openLocalPreview(file)">
+
+    <!-- PDF -->
+
+    <div
+      class="pdf-preview"
+      *ngIf="file.type.includes('pdf')"
+      (click)="openLocalPreview(file)">
+
+      <ion-icon
+        name="document-outline">
+      </ion-icon>
+
+      <span>PDF</span>
+
+    </div>
+
+    <!-- REMOVE -->
+
+    <div
+      class="remove-btn"
+      (click)="removeFile(i)">
+
+      <ion-icon
+        name="close-outline">
+      </ion-icon>
+
+    </div>
+
   </div>
 
 </div>
 
-  <!-- Card -->
-  <div class="card">
+</div>
 
-    <!-- Person -->
-    <ion-item lines="none" class="input">
-      <ion-label>Person</ion-label>
-<ion-select [(ngModel)]="selectedMemberId" interface="alert">
-  <ion-select-option *ngFor="let m of members" [value]="m.id">
-    {{ m.name }}
-  </ion-select-option>
-</ion-select>
-    </ion-item>
+      <!-- HIDDEN INPUT -->
+      <input
+        type="file"
+        multiple
+        hidden
+        #fileInput
+        (change)="onFilesSelected($event)">
 
-    <!-- Category -->
-    <ion-item lines="none" class="input">
-      <ion-label>Category</ion-label>
-     <ion-item lines="none" class="input">
-  <ion-label>Category</ion-label>
-  <ion-select [(ngModel)]="selectedCategoryId" (ionChange)="onCategoryChange()">
-    <ion-select-option *ngFor="let c of categories" [value]="c.id">
-      {{ c.name }}
-    </ion-select-option>
-  </ion-select>
-</ion-item>
-    </ion-item>
+      <!-- SELECT BUTTON -->
+      <ion-button
+        expand="block"
+        class="select-btn"
+        (click)="openOptions(fileInput)">
 
-    <!-- Type -->
-<ion-item lines="none" class="input" *ngIf="types.length > 0">
-  <ion-label>Type</ion-label>
-  <ion-select [(ngModel)]="selectedTypeId">
-    <ion-select-option *ngFor="let t of types" [value]="t.id">
-      {{ t.name }}
-    </ion-select-option>
-  </ion-select>
-</ion-item>
+        <ion-icon slot="start" name="attach-outline"></ion-icon>
 
-    <!-- Selected files -->
-    <div *ngIf="selectedFileNames.length > 0" class="file-list">
-      <p *ngFor="let name of selectedFileNames">
-        📄 {{ name }}
-      </p>
+        Select Files
+
+      </ion-button>
+
+      <!-- UPLOAD BUTTON -->
+      <ion-button
+        expand="block"
+        class="upload-btn"
+        (click)="upload()">
+
+        <ion-icon slot="start" name="cloud-upload-outline"></ion-icon>
+
+        Upload Securely
+
+      </ion-button>
+
+    </div>
+<!-- UPLOAD OVERLAY -->
+
+<div
+  class="upload-overlay"
+  *ngIf="isUploading">
+
+  <div class="upload-box">
+
+    <div class="upload-icon">
+      🔐
     </div>
 
-    <!-- Hidden file input -->
-    <input 
-      type="file" 
-      multiple 
-      hidden 
-      #fileInput 
-      (change)="onFilesSelected($event)"
-    >
+    <h3>
+      Securing Files
+    </h3>
 
-    <!-- SINGLE BUTTON -->
-    <ion-button expand="block" class="select-btn" (click)="openOptions(fileInput)">
-      📎 Select File
-    </ion-button>
+    <p>
+      {{ uploadMessage }}
+    </p>
 
-    <!-- Upload -->
-    <ion-button expand="block" class="upload-btn" (click)="upload()">
-      Upload
-    </ion-button>
+    <div class="progress-bar">
 
+      <div
+        class="progress-fill"
+        [style.width.%]="uploadProgress">
+
+      </div>
+
+    </div>
+
+    <div class="progress-text">
+      {{ uploadProgress }}%
+    </div>
+
+  </div>
+
+</div>
   </div>
 
 </ion-content>

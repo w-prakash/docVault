@@ -126,8 +126,7 @@ export class SupabaseService {
       .order('name', { ascending: true });
   }
 
-async ensureVault() {
-
+async ensureVault(loginPassword: string) {
   const { data: userData, error } = await this.getCurrentUser();
 
   if (error || !userData.user) {
@@ -150,26 +149,67 @@ async ensureVault() {
   }
 
   // 🆕 create if not exists
-  if (!existing) {
-    const salt = CryptoJS.lib.WordArray.random(128 / 8).toString();
+if (!existing) {
 
-    const { error: insertError } = await this.supabase
+  // 🔐 random salt
+  const salt =
+    CryptoJS.lib.WordArray
+      .random(128 / 8)
+      .toString();
+
+  // 🔐 derive key from LOGIN password
+  const key = CryptoJS.PBKDF2(
+    loginPassword,
+    salt,
+    {
+      keySize: 256 / 32,
+      iterations: 100000
+    }
+  ).toString();
+
+  // 🔥 vault validation token
+  const vaultCheck =
+    CryptoJS.AES.encrypt(
+      'vault-check',
+      key
+    ).toString();
+
+  // 💾 save vault
+  const { error: insertError } =
+    await this.supabase
       .from('user_vaults')
       .insert({
         user_id: userId,
-        salt: salt
+        salt: salt,
+        vault_check: vaultCheck
       });
 
-    if (insertError) {
-      console.error('Vault creation failed', insertError);
-    } else {
-      console.log('Vault created');
-    }
+  if (insertError) {
+
+    console.error(
+      'Vault creation failed',
+      insertError
+    );
+
+  } else {
+
+    console.log('Vault created');
+
   }
+}
 }
 
 async getCurrentUser() {
   return await this.supabase.auth.getUser();
+}
+
+async getVaultData(userId: string) {
+
+  return await this.supabase
+    .from('user_vaults')
+    .select('salt, vault_check')
+    .eq('user_id', userId)
+    .single();
 }
 
 async getVaultSalt(userId: string) {

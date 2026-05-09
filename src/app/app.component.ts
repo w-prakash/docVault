@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { VaultService } from './services/vault.service';
 
 @Component({
   selector: 'app-root',
@@ -7,5 +8,26 @@ import { Component } from '@angular/core';
   standalone: false,
 })
 export class AppComponent {
-  constructor() {}
+  showVaultLock = false;
+  constructor(  private vaultService: VaultService
+) {}
+
+ngOnInit() {
+
+  this.vaultService.onLockChange(
+    (locked) => {
+
+      if (locked) {
+
+        this.showVaultLock = true;
+
+        setTimeout(() => {
+
+          this.showVaultLock = false;
+
+        }, 1600);
+      }
+    }
+  );
+}
 }

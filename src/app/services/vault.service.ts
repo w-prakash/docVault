@@ -9,7 +9,8 @@ export class VaultService {
 
   private vaultKey: string | null = null;
   private lockTimer: any;
-
+private lockListeners:
+  ((locked: boolean) => void)[] = [];
   constructor(private modalCtrl: ModalController, private supabaseService: SupabaseService) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -51,7 +52,7 @@ async getVaultKey(): Promise<string | null> {
 
   // 🛠 fallback (first time user)
   if (!salt) {
-    await this.supabaseService.ensureVault();
+    await this.supabaseService.ensureVault(password);
     const retry = await this.supabaseService.getVaultSalt(userId);
     salt = retry.data?.salt;
   }
@@ -75,10 +76,68 @@ private deriveKey(password: string, salt: string): string {
 
   const key = CryptoJS.PBKDF2(password, salt, {
     keySize: 256 / 32,
-    iterations: 500000
+    iterations: 100000
   });
 
   return key.toString();
+}
+
+async validatePassword(
+  password: string
+): Promise<boolean> {
+
+  try {
+
+    console.log('🔐 VALIDATING PASSWORD');
+
+    const { data: userData } =
+      await this.supabaseService
+        .getCurrentUser();
+
+    const userId =
+      userData.user?.id;
+
+    console.log('👤 USER', userId);
+
+    if (!userId) return false;
+
+    const { data } =
+      await this.supabaseService
+        .getVaultData(userId);
+
+    console.log('📦 VAULT DATA', data);
+
+    if (!data) return false;
+
+    // 🔐 derive key
+    const key = this.deriveKey(
+      password,
+      data.salt
+    );
+
+    console.log('🗝 DERIVED KEY', key);
+
+    // 🔓 decrypt
+    const decrypted =
+      CryptoJS.AES.decrypt(
+        data.vault_check,
+        key
+      ).toString(CryptoJS.enc.Utf8);
+
+    console.log('🔓 DECRYPTED', decrypted);
+
+    return decrypted ===
+      'vault-check';
+
+  } catch (e) {
+
+    console.error(
+      '❌ VALIDATION ERROR',
+      e
+    );
+
+    return false;
+  }
 }
   // 🔓 modal open
   private async openUnlockModal(): Promise<string | null> {
@@ -102,9 +161,13 @@ private deriveKey(password: string, salt: string): string {
   }
 
   // 🔐 manual lock
-  clearKey() {
-    this.vaultKey = null;
-  }
+clearKey() {
+
+  this.vaultKey = null;
+
+  // 🔒 trigger animation
+  this.emitLockState(true);
+}
 
 // async tryBiometricUnlock(): Promise<boolean> {
 //   try {
@@ -155,6 +218,23 @@ async tryBiometricUnlock(): Promise<boolean> {
     console.warn('Auth failed or cancelled', error);
     return false;
   }
+}
+
+//onLockChange
+onLockChange(
+  callback: (locked: boolean) => void
+) {
+
+  this.lockListeners.push(callback);
+}
+
+private emitLockState(
+  state: boolean
+) {
+
+  this.lockListeners.forEach(
+    cb => cb(state)
+  );
 }
 
 }

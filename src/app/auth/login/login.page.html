@@ -1,31 +1,118 @@
-<ion-content class="login-bg">
+<ion-content class="app-bg">
 
-  <!-- Top Shape -->
-  <div class="top-shape">
-    <h2>Welcome Back,</h2>
-    <h1>Log In!</h1>
-  </div>
+  <!-- BACKGROUND GLOW -->
+  <div class="login-glow"></div>
 
-  <!-- Card -->
-  <div class="card">
+  <div class="login-container">
 
-    <ion-item lines="none" class="input">
-      <ion-input placeholder="Email Address" [(ngModel)]="email"></ion-input>
-    </ion-item>
+    <!-- TOP -->
+    <div class="login-header">
 
-    <ion-item lines="none" class="input">
-      <ion-input type="password" placeholder="Password" [(ngModel)]="password"></ion-input>
-    </ion-item>
+      <div class="logo-circle">
+        🔒
+      </div>
 
-    <div class="row">
-      <ion-checkbox></ion-checkbox>
-      <span>Remember me</span>
-      <span class="forgot">Forgot password?</span>
+      <h1>Welcome Back</h1>
+
+      <p>
+        Access your secure encrypted vault
+      </p>
+
     </div>
 
-    <ion-button expand="block" class="login-btn" (click)="login()">
-      Log In
-    </ion-button>
+    <!-- LOGIN CARD -->
+    <div class="glass-card login-card">
+
+      <!-- EMAIL -->
+      <div class="input-label">
+        Email Address
+      </div>
+
+      <ion-item
+        lines="none"
+        class="app-input">
+
+        <ion-input
+          type="email"
+          placeholder="Enter email"
+          [(ngModel)]="email">
+
+        </ion-input>
+
+      </ion-item>
+
+      <!-- PASSWORD -->
+      <div class="input-label">
+        Password
+      </div>
+
+      <ion-item
+        lines="none"
+        class="app-input">
+
+        <ion-input
+          [type]="showPassword ? 'text' : 'password'"
+          placeholder="Enter password"
+          [(ngModel)]="password">
+
+        </ion-input>
+
+        <ion-button
+          fill="clear"
+          slot="end"
+          class="eye-btn"
+          (click)="showPassword = !showPassword">
+
+          <ion-icon
+            [name]="showPassword ? 'eye-off-outline' : 'eye-outline'">
+          </ion-icon>
+
+        </ion-button>
+
+      </ion-item>
+
+      <!-- REMEMBER -->
+      <div class="remember-row">
+
+        <div class="remember-left">
+
+          <ion-checkbox></ion-checkbox>
+
+          <span>
+            Remember me
+          </span>
+
+        </div>
+
+        <button class="forgot-btn">
+          Forgot Password?
+        </button>
+      </div>
+
+      <!-- BUTTON -->
+<ion-button
+  expand="block"
+  class="login-btn"
+  (click)="login()"
+  [disabled]="isLoading">
+
+  <ion-spinner
+    *ngIf="isLoading"
+    slot="start"
+    name="crescent">
+  </ion-spinner>
+
+  {{
+    isLoading
+      ? 'Signing In...'
+      : 'Secure Login'
+  }}
+
+</ion-button>
+<p class="login-error" *ngIf="error">
+  {{ error }}
+</p>
+    </div>
 
   </div>
 

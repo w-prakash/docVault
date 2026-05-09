@@ -8,6 +8,9 @@ import { Router } from '@angular/router';
 import { Location } from '@angular/common';
 import { VaultService } from '../services/vault.service';
 import { encryptData } from 'src/app/utils/encryption.util';
+import {
+  DomSanitizer
+} from '@angular/platform-browser';
 @Component({
   selector: 'app-upload',
   standalone: true,
@@ -21,7 +24,17 @@ export class UploadPage {
   members: any[] = [];
   categories: any[] = [];
   types: any[] = [];
+isUploading = false;
+selectedFilesPreview: any[] = [];
+uploadProgress = 0;
+selectedDocUrl = '';
 
+isPdf = false;
+
+safeUrl: any;
+
+isPreviewOpen = false;
+uploadMessage = '';
   selectedMemberId: string = '';
   selectedCategoryId: string = '';
   selectedTypeId: string = '';
@@ -35,7 +48,9 @@ export class UploadPage {
     private actionSheetCtrl: ActionSheetController,
     private router: Router,
     private location: Location,
-    private vaultService: VaultService
+    private vaultService: VaultService,
+    private sanitizer: DomSanitizer
+
   ) {}
 
   // 🚀 Load initial data
@@ -80,28 +95,43 @@ export class UploadPage {
   }
 
   // 📸 Select file options
-  async openOptions(fileInput: any) {
-    const sheet = await this.actionSheetCtrl.create({
+async openOptions(fileInput: any) {
+
+  const sheet =
+    await this.actionSheetCtrl.create({
+
       header: 'Upload Document',
+
+      cssClass: 'vault-action-sheet',
+
       buttons: [
+
         {
           text: 'Camera',
-          handler: () => this.captureFromCamera()
+          icon: 'camera-outline',
+
+          handler: () =>
+            this.captureFromCamera()
         },
+
         {
           text: 'Gallery',
-          handler: () => fileInput.click()
+          icon: 'images-outline',
+
+          handler: () =>
+            fileInput.click()
         },
+
         {
           text: 'Cancel',
-          role: 'cancel'
+          role: 'cancel',
+          icon: 'close-outline'
         }
       ]
     });
 
-    await sheet.present();
-  }
-
+  await sheet.present();
+}
   // 📷 Camera
   async captureFromCamera() {
     const image = await Camera.getPhoto({
@@ -119,14 +149,46 @@ export class UploadPage {
   }
 
   // 📁 Multi file select
-  onFilesSelected(event: any) {
-    const selectedFiles = event.target.files;
+onFilesSelected(event: any) {
 
-    for (let i = 0; i < selectedFiles.length; i++) {
-      this.files.push(selectedFiles[i]);
-      this.selectedFileNames.push(selectedFiles[i].name);
-    }
+  const files:any =
+    Array.from(event.target.files)
+  for (const file of files) {
+
+    this.files.push(file);
+
+    this.selectedFileNames.push(file.name);
+
+    // 🔥 preview object
+    this.selectedFilesPreview.push({
+
+      name: file.name,
+
+      type: file.type,
+
+      url: URL.createObjectURL(file)
+    });
   }
+}
+
+openLocalPreview(file: any) {
+
+  this.selectedDocUrl = file.url;
+
+  this.isPdf =
+    file.type.includes('pdf');
+
+  if (this.isPdf) {
+
+    this.safeUrl =
+      this.sanitizer
+        .bypassSecurityTrustResourceUrl(
+          file.url
+        );
+  }
+
+  this.isPreviewOpen = true;
+}
 
   // 🔄 Convert
   async convertToFile(path: string): Promise<File> {
@@ -138,58 +200,181 @@ export class UploadPage {
     });
   }
 
-  // 📤 Upload
+// 📤 Upload
 async upload() {
 
+  // ❌ validation
   if (this.files.length === 0) {
+
     alert('Please select files');
     return;
   }
 
-  if (!this.selectedMemberId || !this.selectedCategoryId) {
+  if (
+    !this.selectedMemberId ||
+    !this.selectedCategoryId
+  ) {
+
     alert('Please fill all fields');
     return;
   }
 
-  // 🔐 get derived key (already derived)
-  const key = await this.vaultService.getVaultKey();
-  if (!key) return;
+  // 🔄 START UI
+  this.isUploading = true;
 
-  for (const file of this.files) {
+  this.uploadProgress = 0;
 
-    try {
-      // 🔐 Encrypt file
-const buffer = await file.arrayBuffer();
-const encrypted = encryptData(buffer, key);
+  this.uploadMessage =
+    'Preparing secure upload...';
 
-const encryptedFile = new File(
-  [encrypted],
-  file.name + '.enc',
-  { type: 'text/plain' }
-);
-      const filePath = await this.supabaseService.uploadFile(encryptedFile);
+  try {
 
-      await this.supabaseService.saveRecord({
-        member_id: this.selectedMemberId,
-        category_id: this.selectedCategoryId,
-        type_id: this.selectedTypeId,
-        file_url: filePath,
-        file_type: file.type,
-        created_at: new Date(),
-      });
+    // 🔐 get vault key
+    const key =
+      await this.vaultService.getVaultKey();
 
-    } catch (e) {
-      console.error('Upload failed', e);
+    if (!key) {
+
+      this.isUploading = false;
+      return;
     }
+
+    // 📂 TOTAL FILES
+    const totalFiles =
+      this.files.length;
+
+    // 🔁 LOOP FILES
+    for (let i = 0; i < totalFiles; i++) {
+
+      const file =
+        this.files[i];
+
+      try {
+
+        // 🔢 progress calculation
+        const startProgress =
+          Math.round((i / totalFiles) * 100);
+
+        const endProgress =
+          Math.round(((i + 1) / totalFiles) * 100);
+
+        // 🔐 ENCRYPT
+        this.uploadMessage =
+          `Encrypting ${file.name}`;
+
+        this.uploadProgress =
+          startProgress + 10;
+
+        const buffer =
+          await file.arrayBuffer();
+
+        const encrypted =
+          encryptData(buffer, key);
+
+        // 📦 create encrypted file
+        const encryptedFile =
+          new File(
+            [encrypted],
+            file.name + '.enc',
+            {
+              type: 'text/plain'
+            }
+          );
+
+        // 📤 UPLOAD
+        this.uploadMessage =
+          `Uploading ${file.name}`;
+
+        this.uploadProgress =
+          startProgress + 45;
+
+        const filePath =
+          await this.supabaseService
+            .uploadFile(encryptedFile);
+
+        // 💾 SAVE METADATA
+        this.uploadMessage =
+          `Saving ${file.name}`;
+
+        this.uploadProgress =
+          startProgress + 75;
+
+        await this.supabaseService
+          .saveRecord({
+
+            member_id:
+              this.selectedMemberId,
+
+            category_id:
+              this.selectedCategoryId,
+
+            type_id:
+              this.selectedTypeId,
+
+            file_url:
+              filePath,
+
+            file_type:
+              file.type,
+
+            created_at:
+              new Date(),
+          });
+
+        // ✅ file completed
+        this.uploadProgress =
+          endProgress;
+
+      } catch (e) {
+
+        console.error(
+          'Upload failed',
+          file.name,
+          e
+        );
+      }
+    }
+
+    // ✅ FINISH
+    this.uploadProgress = 100;
+
+    this.uploadMessage =
+      'Upload complete';
+
+    // ✨ small delay
+    setTimeout(() => {
+
+      this.isUploading = false;
+
+      this.files = [];
+
+      this.selectedFileNames = [];
+
+      this.router.navigateByUrl(
+        '/dashboard'
+      );
+
+    }, 800);
+
+  } catch (e) {
+
+    console.error(e);
+
+    this.isUploading = false;
+
+    alert('Upload failed');
   }
-
-  alert('Encrypted upload complete ✔');
-  this.router.navigateByUrl('/dashboard');
-
-  this.files = [];
-  this.selectedFileNames = [];
 }
   goBack() {
   this.location.back();
+}
+
+removeFile(index: number) {
+
+  this.files.splice(index, 1);
+
+  this.selectedFileNames.splice(index, 1);
+
+  this.selectedFilesPreview.splice(index, 1);
 }
 }

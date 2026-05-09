@@ -11,7 +11,15 @@ import { ToastController } from '@ionic/angular';
 import { decryptData } from 'src/app/utils/encryption.util';
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.js';
 import { VaultService } from '../../services/vault.service';
+import {
+  Filesystem,
+  Directory
+} from '@capacitor/filesystem';
 
+import {
+  Share
+} from '@capacitor/share';
+import { Router } from '@angular/router';
 // ✅ TYPES (IMPORTANT)
 type Member = { name: string };
 type Category = { name: string };
@@ -66,6 +74,7 @@ searchText: string = '';
     private actionSheetCtrl: ActionSheetController,
       private alertCtrl: AlertController,
     private location: Location,
+    private router: Router,
     private vaultService: VaultService,
     private toastCtrl: ToastController
   ) {}
@@ -102,7 +111,14 @@ async loadDocuments() {
   if (!data) return;
 
   const key = await this.vaultService.getVaultKey();
-  if (!key) return;
+  if (!key) {
+
+  this.router.navigateByUrl(
+    '/dashboard'
+  );
+
+  return;
+}
 
   const result: DocumentItem[] = [];
 
@@ -174,26 +190,66 @@ async loadDocuments() {
   }
 
   // ✅ MENU
-  async openMenu(doc: DocumentItem) {
-    const sheet = await this.actionSheetCtrl.create({
+async openMenu(doc: DocumentItem) {
+
+  const sheet =
+    await this.actionSheetCtrl.create({
+
       header: 'Options',
+
+      cssClass: 'vault-action-sheet',
+
       buttons: [
-        { text: 'View', handler: () => this.viewDoc(doc) },
-        { text: 'Download', handler: () => this.downloadDoc(doc) },
-        { text: 'Share', handler: () => this.shareDoc(doc) },
-        { text: 'Cancel', role: 'cancel' },
-        { text: 'Delete', role: 'destructive', handler: () => this.confirmDelete(doc) }
+
+        {
+          text: 'View',
+          icon: 'eye-outline',
+          handler: () => this.viewDoc(doc)
+        },
+
+        {
+          text: 'Download',
+          icon: 'download-outline',
+          handler: () => this.downloadDoc(doc)
+        },
+
+        {
+          text: 'Share',
+          icon: 'share-social-outline',
+          handler: () => this.shareDoc(doc)
+        },
+
+        {
+          text: 'Delete',
+          role: 'destructive',
+          icon: 'trash-outline',
+          handler: () => this.confirmDelete(doc)
+        },
+
+        {
+          text: 'Cancel',
+          role: 'cancel',
+          icon: 'close-outline'
+        }
+
       ]
     });
 
-    await sheet.present();
-  }
+  await sheet.present();
+}
 
   // ✅ VIEW
 async viewDoc(doc: any) {
 
   const key = await this.vaultService.getVaultKey();
-  if (!key) return;
+if (!key) {
+
+  this.router.navigateByUrl(
+    '/dashboard'
+  );
+
+  return;
+}
 
   const signedUrl = await this.supabaseService.getSignedUrl(doc.file_url);
   if (!signedUrl) return;
@@ -242,76 +298,196 @@ const url = URL.createObjectURL(blob);
   // ✅ DOWNLOAD
 async downloadDoc(doc: any) {
 
-  const key = await this.vaultService.getVaultKey();
+  console.log('📥 DOWNLOAD START');
+
+  const key =
+    await this.vaultService.getVaultKey();
+
+  console.log('🔐 KEY', !!key);
+
   if (!key) return;
 
-  const signedUrl = await this.supabaseService.getSignedUrl(doc.file_url);
+  const signedUrl =
+    await this.supabaseService
+      .getSignedUrl(doc.file_url);
+
+  console.log('🔗 SIGNED URL', signedUrl);
+
   if (!signedUrl) return;
 
   try {
+
+    // 🔽 fetch encrypted
     const res = await fetch(signedUrl);
-    const encryptedText = await res.text();
 
-    const decrypted = decryptData(encryptedText, key);
+    console.log('📦 FETCH STATUS', res.status);
 
-    const safeBuffer = new Uint8Array(decrypted).buffer;
+    const encryptedText =
+      await res.text();
 
-    const blob = new Blob([safeBuffer], {
-      type: doc.file_url.toLowerCase().includes('.pdf')
-        ? 'application/pdf'
-        : 'image/jpeg'
-    });
+    console.log(
+      '📄 ENCRYPTED LENGTH',
+      encryptedText.length
+    );
+
+    // 🔓 decrypt
+    const decrypted =
+      decryptData(encryptedText, key);
+
+    console.log(
+      '✅ DECRYPTED BYTES',
+      decrypted.length
+    );
+
+    // 🔥 convert Uint8Array → binary
+    const binary =
+      Array.from(decrypted)
+        .map(b => String.fromCharCode(b))
+        .join('');
+
+    // 🔥 binary → base64
+    const base64 =
+      btoa(binary);
+
+    console.log(
+      '🧬 BASE64 LENGTH',
+      base64.length
+    );
 
     const fileName =
-      doc.file_url.split('/').pop()?.replace('.enc', '') || 'file';
+      doc.file_url
+        .split('/')
+        .pop()
+        ?.replace('.enc', '')
+      || 'file';
 
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = fileName;
-    a.click();
+    console.log('📄 FILE NAME', fileName);
+
+    // 📁 save file
+    const result =
+      await Filesystem.writeFile({
+        path: fileName,
+        data: base64,
+        directory: Directory.Cache
+      });
+
+    console.log('✅ FILE SAVED', result);
+
+    alert('Download success');
 
   } catch (e) {
-    console.error(e);
-    alert('Invalid password');
-    this.vaultService.clearKey();
+
+    console.error(
+      '❌ DOWNLOAD ERROR',
+      e
+    );
+
+    alert(JSON.stringify(e));
   }
 }
   // ✅ SHARE
 async shareDoc(doc: any) {
 
-  const key = await this.vaultService.getVaultKey();
+  console.log('📤 SHARE START');
+
+  const key =
+    await this.vaultService.getVaultKey();
+
+  console.log('🔐 KEY', !!key);
+
   if (!key) return;
 
-  const signedUrl = await this.supabaseService.getSignedUrl(doc.file_url);
+  const signedUrl =
+    await this.supabaseService
+      .getSignedUrl(doc.file_url);
+
+  console.log('🔗 SIGNED URL', signedUrl);
+
   if (!signedUrl) return;
 
   try {
+
+    // 🔽 fetch encrypted
     const res = await fetch(signedUrl);
-    const encryptedText = await res.text();
 
-    const decrypted = decryptData(encryptedText, key);
+    console.log('📦 FETCH STATUS', res.status);
 
-    const safeBuffer = new Uint8Array(decrypted).buffer;
+    const encryptedText =
+      await res.text();
 
-    const blob = new Blob([safeBuffer], {
-      type: doc.file_url.toLowerCase().includes('.pdf')
-        ? 'application/pdf'
-        : 'image/jpeg'
-    });
+    console.log(
+      '📄 ENCRYPTED LENGTH',
+      encryptedText.length
+    );
+
+    // 🔓 decrypt
+    const decrypted =
+      decryptData(encryptedText, key);
+
+    console.log(
+      '✅ DECRYPTED BYTES',
+      decrypted.length
+    );
+
+    // 🔥 convert Uint8Array → binary
+    const binary =
+      Array.from(decrypted)
+        .map(b => String.fromCharCode(b))
+        .join('');
+
+    // 🔥 binary → base64
+    const base64 =
+      btoa(binary);
 
     const fileName =
-      doc.file_url.split('/').pop()?.replace('.enc', '') || 'file';
+      doc.file_url
+        .split('/')
+        .pop()
+        ?.replace('.enc', '')
+      || 'file';
 
-    const file = new File([blob], fileName, { type: blob.type });
+    console.log('📄 FILE NAME', fileName);
 
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file] });
-    }
+    // 📁 save temp file
+    const saveResult =
+      await Filesystem.writeFile({
+        path: fileName,
+        data: base64,
+        directory: Directory.Cache
+      });
+
+    console.log(
+      '✅ TEMP FILE SAVED',
+      saveResult
+    );
+
+    // 🔗 get URI
+    const uri =
+      await Filesystem.getUri({
+        directory: Directory.Cache,
+        path: fileName
+      });
+
+    console.log('🔗 FILE URI', uri);
+
+    // 📤 native share
+    await Share.share({
+      title: fileName,
+      text: 'Shared from DocVault',
+      url: uri.uri,
+      dialogTitle: 'Share File'
+    });
+
+    console.log('✅ SHARE SUCCESS');
 
   } catch (e) {
-    console.error(e);
-    alert('Invalid password');
-    this.vaultService.clearKey();
+
+    console.error(
+      '❌ SHARE ERROR',
+      e
+    );
+
+    alert(JSON.stringify(e));
   }
 }
 

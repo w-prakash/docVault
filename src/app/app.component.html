@@ -1,3 +1,32 @@
 <ion-app>
   <ion-router-outlet></ion-router-outlet>
 </ion-app>
+
+<!-- VAULT LOCK SCREEN -->
+
+<div
+  class="vault-lock-screen"
+  *ngIf="showVaultLock">
+
+  <div class="vault-lock-box">
+
+    <div class="vault-ring">
+
+      <ion-icon
+        name="lock-closed">
+      </ion-icon>
+
+    </div>
+
+    <h2>
+      Vault Locked
+    </h2>
+
+    <p>
+      Your encrypted vault
+      is now secured
+    </p>
+
+  </div>
+
+</div>

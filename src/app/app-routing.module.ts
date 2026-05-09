@@ -3,14 +3,19 @@ import { PreloadAllModules, RouterModule, Routes } from '@angular/router';
 
 const routes: Routes = [
   {
+  path: '',
+  redirectTo: 'splash',
+  pathMatch: 'full'
+},
+  {
     path: 'home',
   loadComponent: () => import('./auth/login/login.page').then(m => m.LoginPage)
   },
-  {
-    path: '',
-    redirectTo: 'home',
-    pathMatch: 'full'
-  },
+  // {
+  //   path: '',
+  //   redirectTo: 'home',
+  //   pathMatch: 'full'
+  // },
 {
   path: 'login',
   loadComponent: () => import('./auth/login/login.page').then(m => m.LoginPage)
@@ -26,6 +31,10 @@ const routes: Routes = [
   {
     path: 'documents',
     loadComponent: () => import('./pages/documents/documents.page').then( m => m.DocumentsPage)
+  },
+  {
+    path: 'splash',
+    loadComponent: () => import('./pages/splash/splash.page').then( m => m.SplashPage)
   }
 ];
 
