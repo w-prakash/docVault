@@ -4,6 +4,7 @@ import { ModalController } from '@ionic/angular';
 import { VaultUnlockComponent } from '../components/vault-unlock/vault-unlock.component';
 import { SupabaseService } from './supabase.service';
 import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
+import { Preferences } from '@capacitor/preferences';
 @Injectable({ providedIn: 'root' })
 export class VaultService {
 
@@ -11,6 +12,7 @@ export class VaultService {
   private lockTimer: any;
 private lockListeners:
   ((locked: boolean) => void)[] = [];
+  isUnlocking = false;
   constructor(private modalCtrl: ModalController, private supabaseService: SupabaseService) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -19,54 +21,319 @@ private lockListeners:
   });
   }
 
-  // 🔐 Get key (main function)
-async getVaultKey(): Promise<string | null> {
+// =====================================
+// GET VAULT KEY
+// =====================================
 
-  // ✅ already unlocked
-  if (this.vaultKey) return this.vaultKey;
+// async getVaultKey():
+// Promise<string | null> {
 
-  // 🔐 STEP 1: Try biometric / device unlock
-  const biometricSuccess = await this.tryBiometricUnlock();
+//   // ✅ already unlocked
+// // this.isUnlocking = true;
 
-  // 👉 If biometric success AND key exists in memory
-  if (biometricSuccess && this.vaultKey) {
+//   if (this.vaultKey) {
+// this.isUnlocking = false;
+
+//     return this.vaultKey;
+//   }
+
+//   // =====================================
+//   // BIOMETRIC UNLOCK
+//   // =====================================
+
+//   const biometricSuccess =
+//     await this.tryBiometricUnlock();
+
+//   if (
+//     biometricSuccess &&
+//     this.vaultKey
+//   ) {
+// this.isUnlocking = false;
+
+//     return this.vaultKey;
+//   }
+
+//   // =====================================
+//   // PASSWORD UNLOCK
+//   // =====================================
+
+//   const password =
+//     await this.openUnlockModal();
+// this.isUnlocking = true;
+//   if (!password) {
+// this.isUnlocking = false;
+//     return null;
+//   }
+
+//   // =====================================
+//   // VALIDATE PASSWORD
+//   // =====================================
+
+//   const valid =
+//     await this.validatePassword(
+//       password
+//     );
+
+//   if (!valid) {
+
+//     console.error(
+//       '❌ Invalid password'
+//     );
+// this.isUnlocking = false;
+//     return null;
+//   }
+
+//   // =====================================
+//   // GET VAULT META
+//   // =====================================
+
+//   let vaultData: any = null;
+
+//   // 🌐 ONLINE
+
+//   if (navigator.onLine) {
+
+//     const {
+//       data: userData
+//     } =
+//       await this.supabaseService
+//         .getCurrentUser();
+
+//     const userId =
+//       userData.user?.id;
+
+//     if (!userId) {
+// this.isUnlocking = false;
+//       return null;
+//     }
+
+//     const {
+//       data
+//     } =
+//       await this.supabaseService
+//         .getVaultData(
+//           userId
+//         );
+
+//     vaultData = data;
+//   }
+
+//   // 📴 OFFLINE
+
+//   else {
+
+//     vaultData =
+//       await this
+//         .getLocalVaultMeta();
+//   }
+
+//   if (!vaultData?.salt) {
+
+//     console.error(
+//       '❌ Salt missing'
+//     );
+// this.isUnlocking = false;
+//     return null;
+//   }
+
+//   // =====================================
+//   // DERIVE KEY
+//   // =====================================
+
+//   const key =
+//     this.deriveKey(
+//       password,
+//       vaultData.salt
+//     );
+
+//   // =====================================
+//   // SAVE MEMORY KEY
+//   // =====================================
+
+//   this.vaultKey = key;
+
+//   this.startAutoLock();
+
+//   console.log(
+//     '🔓 Vault unlocked'
+//   );
+// this.isUnlocking = false;
+//   return key;
+// }
+
+// =====================================
+// GET VAULT KEY
+// =====================================
+
+async getVaultKey():
+Promise<string | null> {
+
+  // =====================================
+  // ALREADY UNLOCKED
+  // =====================================
+
+  if (this.vaultKey) {
+
+    this.isUnlocking = false;
+
     return this.vaultKey;
   }
 
-  // 🔑 STEP 2: fallback to password
-  const password = await this.openUnlockModal();
-  if (!password) return null;
+  // =====================================
+  // BIOMETRIC UNLOCK
+  // =====================================
 
-  // 🔥 STEP 3: get user
-  const { data: userData } = await this.supabaseService.getCurrentUser();
-  const userId = userData.user?.id;
+  const biometricSuccess =
+    await this.tryBiometricUnlock();
 
-  if (!userId) {
-    console.error('User not found');
+  if (
+    biometricSuccess &&
+    this.vaultKey
+  ) {
+
+    this.isUnlocking = false;
+
+    return this.vaultKey;
+  }
+
+  // =====================================
+  // PASSWORD UNLOCK
+  // =====================================
+
+  const password =
+    await this.openUnlockModal();
+
+  // ❌ cancelled
+
+  if (!password) {
+
+    this.isUnlocking = false;
+
     return null;
   }
 
-  // 🔥 STEP 4: get salt
-  let { data } = await this.supabaseService.getVaultSalt(userId);
-  let salt = data?.salt;
+  // =====================================
+  // SHOW LOADER
+  // =====================================
 
-  // 🛠 fallback (first time user)
-  if (!salt) {
-    await this.supabaseService.ensureVault(password);
-    const retry = await this.supabaseService.getVaultSalt(userId);
-    salt = retry.data?.salt;
-  }
+  this.isUnlocking = true;
 
-  if (!salt) {
-    console.error('Salt not found');
+  // 🔥 allow UI render
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        50
+      )
+  );
+
+  // =====================================
+  // VALIDATE PASSWORD
+  // =====================================
+
+  const valid =
+    await this.validatePassword(
+      password
+    );
+
+  if (!valid) {
+
+    console.error(
+      '❌ Invalid password'
+    );
+
+    this.isUnlocking = false;
+
     return null;
   }
 
-  // 🔐 STEP 5: derive key
-  const key = this.deriveKey(password, salt);
+  // =====================================
+  // GET VAULT META
+  // =====================================
+
+  let vaultData: any = null;
+
+  // 🌐 ONLINE
+
+  if (navigator.onLine) {
+
+    const {
+      data: userData
+    } =
+      await this.supabaseService
+        .getCurrentUser();
+
+    const userId =
+      userData.user?.id;
+
+    if (!userId) {
+
+      this.isUnlocking = false;
+
+      return null;
+    }
+
+    const {
+      data
+    } =
+      await this.supabaseService
+        .getVaultData(
+          userId
+        );
+
+    vaultData = data;
+  }
+
+  // 📴 OFFLINE
+
+  else {
+
+    vaultData =
+      await this
+        .getLocalVaultMeta();
+  }
+
+  // ❌ no salt
+
+  if (!vaultData?.salt) {
+
+    console.error(
+      '❌ Salt missing'
+    );
+
+    this.isUnlocking = false;
+
+    return null;
+  }
+
+  // =====================================
+  // DERIVE KEY
+  // =====================================
+
+  const key =
+    this.deriveKey(
+      password,
+      vaultData.salt
+    );
+
+  // =====================================
+  // SAVE MEMORY KEY
+  // =====================================
 
   this.vaultKey = key;
+
   this.startAutoLock();
+
+  console.log(
+    '🔓 Vault unlocked'
+  );
+
+  // =====================================
+  // HIDE LOADER
+  // =====================================
+
+  this.isUnlocking = false;
 
   return key;
 }
@@ -88,43 +355,116 @@ async validatePassword(
 
   try {
 
-    console.log('🔐 VALIDATING PASSWORD');
-
-    const { data: userData } =
-      await this.supabaseService
-        .getCurrentUser();
-
-    const userId =
-      userData.user?.id;
-
-    console.log('👤 USER', userId);
-
-    if (!userId) return false;
-
-    const { data } =
-      await this.supabaseService
-        .getVaultData(userId);
-
-    console.log('📦 VAULT DATA', data);
-
-    if (!data) return false;
-
-    // 🔐 derive key
-    const key = this.deriveKey(
-      password,
-      data.salt
+    console.log(
+      '🔐 VALIDATING PASSWORD'
     );
 
-    console.log('🗝 DERIVED KEY', key);
+    let vaultData: any = null;
 
-    // 🔓 decrypt
+    // =====================================
+    // ONLINE
+    // =====================================
+
+    if (navigator.onLine) {
+
+      console.log(
+        '🌐 ONLINE VALIDATION'
+      );
+
+      const {
+        data: userData
+      } =
+        await this.supabaseService
+          .getCurrentUser();
+
+      const userId =
+        userData.user?.id;
+
+      if (!userId) {
+        return false;
+      }
+
+      const {
+        data
+      } =
+        await this.supabaseService
+          .getVaultData(
+            userId
+          );
+
+      if (!data) {
+        return false;
+      }
+
+      vaultData = data;
+
+      // 💾 save locally
+
+      await this.saveVaultMeta(
+        data.salt,
+        data.vault_check
+      );
+    }
+
+    // =====================================
+    // OFFLINE
+    // =====================================
+
+    else {
+
+      console.log(
+        '📴 OFFLINE VALIDATION'
+      );
+
+      vaultData =
+        await this
+          .getLocalVaultMeta();
+    }
+
+    // ❌ no vault data
+
+    if (
+      !vaultData?.salt ||
+      !vaultData?.vault_check
+    ) {
+
+      console.error(
+        '❌ Vault data missing'
+      );
+
+      return false;
+    }
+
+    // =====================================
+    // DERIVE KEY
+    // =====================================
+
+    const key =
+      this.deriveKey(
+        password,
+        vaultData.salt
+      );
+
+    console.log(
+      '🗝 DERIVED KEY'
+    );
+
+    // =====================================
+    // VALIDATE
+    // =====================================
+
     const decrypted =
       CryptoJS.AES.decrypt(
-        data.vault_check,
+        vaultData.vault_check,
         key
-      ).toString(CryptoJS.enc.Utf8);
+      ).toString(
+        CryptoJS.enc.Utf8
+      );
 
-    console.log('🔓 DECRYPTED', decrypted);
+    console.log(
+      '🔓 DECRYPTED',
+      decrypted
+    );
 
     return decrypted ===
       'vault-check';
@@ -139,6 +479,8 @@ async validatePassword(
     return false;
   }
 }
+
+
   // 🔓 modal open
   private async openUnlockModal(): Promise<string | null> {
     const modal = await this.modalCtrl.create({
@@ -235,6 +577,66 @@ private emitLockState(
   this.lockListeners.forEach(
     cb => cb(state)
   );
+}
+
+// =====================================
+// SAVE LOCAL VAULT META
+// =====================================
+
+async saveVaultMeta(
+  salt: string,
+  vaultCheck: string
+) {
+
+  await Preferences.set({
+
+    key: 'vault_meta',
+
+    value: JSON.stringify({
+
+      salt,
+
+      vault_check:
+        vaultCheck
+    })
+  });
+
+  console.log(
+    '💾 Vault meta saved'
+  );
+}
+
+// =====================================
+// GET LOCAL VAULT META
+// =====================================
+
+async getLocalVaultMeta() {
+
+  const { value } =
+    await Preferences.get({
+
+      key: 'vault_meta'
+    });
+
+  return JSON.parse(
+    value || '{}'
+  );
+}
+
+// =====================================
+// CURRENT KEY
+// =====================================
+
+get currentKey(): string {
+
+  if (!this.vaultKey) {
+
+    throw new Error(
+      'Vault locked'
+    );
+  }
+
+  return this.vaultKey;
 }
 
 }

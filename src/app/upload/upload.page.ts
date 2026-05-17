@@ -11,6 +11,8 @@ import { encryptData } from 'src/app/utils/encryption.util';
 import {
   DomSanitizer
 } from '@angular/platform-browser';
+import { OfflineVaultService } from '../services/offline-vault.service';
+
 @Component({
   selector: 'app-upload',
   standalone: true,
@@ -49,9 +51,15 @@ uploadMessage = '';
     private router: Router,
     private location: Location,
     private vaultService: VaultService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+      private offlineVault:
+    OfflineVaultService
 
-  ) {}
+  ) {
+      console.log(
+    '✅ Dexie service working'
+  );
+  }
 
   // 🚀 Load initial data
   async ngOnInit() {
@@ -59,36 +67,149 @@ uploadMessage = '';
     await this.loadCategories();
   }
 
-  async loadMembers() {
-    const { data } = await this.supabaseService.getMembers();
+async loadMembers() {
 
-    if (data) {
-      this.members = data;
-      this.selectedMemberId = data[0]?.id;
+  try {
+
+    console.log(
+      '🌐 Fetching members online'
+    );
+
+    const {
+      data,
+      error
+    } =
+      await this.supabaseService
+        .getMembers();
+
+    if (error) {
+      throw error;
     }
+
+    // ✅ UI
+    this.members =
+      data || [];
+
+    // 💾 CACHE OFFLINE
+    await this.offlineVault
+      .saveMembers(
+        this.members
+      );
+
+    console.log(
+      '✅ Members cached offline'
+    );
+
+  } catch (e) {
+
+    console.warn(
+      '⚠️ Loading offline members'
+    );
+
+    // 📦 OFFLINE
+    this.members =
+      await this.offlineVault
+        .getMembers();
+
+    console.log(
+      '✅ Offline members loaded'
+    );
   }
+}
 
-  async loadCategories() {
-    const { data } = await this.supabaseService.getCategories();
+async loadCategories() {
 
-    if (data) {
-      this.categories = data;
-      this.selectedCategoryId = data[0]?.id;
-      await this.loadTypes();
+  try {
+
+    console.log(
+      '🌐 Fetching categories online'
+    );
+
+    const {
+      data,
+      error
+    } =
+      await this.supabaseService
+        .getCategories();
+
+    if (error) {
+      throw error;
     }
+
+    this.categories =
+      data || [];
+
+    await this.offlineVault
+      .saveCategories(
+        this.categories
+      );
+
+    console.log(
+      '✅ Categories cached offline'
+    );
+
+  } catch (e) {
+
+    console.warn(
+      '⚠️ Loading offline categories'
+    );
+
+    this.categories =
+      await this.offlineVault
+        .getCategories();
+
+    console.log(
+      '✅ Offline categories loaded'
+    );
   }
+}
 
-  async loadTypes() {
-    if (!this.selectedCategoryId) return;
+async loadTypes() {
 
-    const { data } = await this.supabaseService.getTypes(this.selectedCategoryId);
+  try {
 
-    if (data) {
-      this.types = data;
-      this.selectedTypeId = data[0]?.id;
+    console.log(
+      '🌐 Fetching types online'
+    );
+
+    const {
+      data,
+      error
+    } =
+      await this.supabaseService
+        .getAllTypes();
+
+    if (error) {
+      throw error;
     }
-  }
 
+    this.types =
+      data || [];
+
+    await this.offlineVault
+      .saveTypes(
+        this.types
+      );
+
+    console.log(
+      '✅ Types cached offline'
+    );
+
+  } catch (e) {
+
+    console.warn(
+      '⚠️ Loading offline types'
+    );
+
+    this.types =
+      await this.offlineVault
+        .getTypes();
+
+    console.log(
+      '✅ Offline types loaded'
+    );
+  }
+}
   onCategoryChange() {
     this.selectedTypeId = '';
     this.loadTypes();
@@ -270,7 +391,182 @@ async upload() {
 
         const encrypted =
           encryptData(buffer, key);
+// =====================================
+// SAVE ENCRYPTED FILE LOCALLY
+// =====================================
 
+const localFileName =
+  `${Date.now()}_${file.name}.enc`;
+
+const localPath =
+  await this.offlineVault
+    .saveEncryptedFile(
+      localFileName,
+      encrypted
+    );
+
+// =====================================
+// LOCAL DOCUMENT OBJECT
+// =====================================
+
+const localDoc = {
+
+  server_id: null,
+
+  member_id:
+    this.selectedMemberId,
+
+  category_id:
+    this.selectedCategoryId,
+
+  type_id:
+    this.selectedTypeId,
+
+  file_url:
+    localFileName,
+original_name:
+  file.name,
+  file_type:
+    file.type,
+thumbnail_path:
+  `thumbnails/${localFileName}.thumb`,
+created_at:
+  new Date().toISOString(),
+
+  local_path:
+    localPath,
+
+  synced: false,
+
+  sync_pending: true,
+
+  sync_failed: false,
+members:
+  this.members.find(
+    m => m.id === this.selectedMemberId
+  ),
+
+categories:
+  this.categories.find(
+    c => c.id === this.selectedCategoryId
+  ),
+
+types:
+  this.types.find(
+    t => t.id === this.selectedTypeId
+  ),
+  local_only: true
+};
+
+// =====================================
+// SAVE LOCAL DOC
+// =====================================
+
+const localId =
+  await this.offlineVault
+    .saveLocalDocument(
+      localDoc
+    );
+
+await this.offlineVault
+  .addToSyncQueue({
+
+    type: 'upload',
+
+    document_id:
+      localId
+  });
+  // =====================================
+// LOCAL THUMBNAIL
+// =====================================
+
+try {
+
+  const blob =
+    new Blob(
+      [buffer],
+      {
+        type: file.type
+      }
+    );
+
+  const reader =
+    new FileReader();
+
+await new Promise<void>((resolve) => {
+
+  const reader =
+    new FileReader();
+
+  reader.onloadend =
+    async () => {
+
+      try {
+
+        const base64 =
+          (
+            reader.result as string
+          ).split(',')[1];
+
+        await this.offlineVault
+          .saveThumbnail(
+            localFileName + '.thumb',
+            base64
+          );
+
+        console.log(
+          '🖼 Local thumbnail saved'
+        );
+
+      } catch (e) {
+
+        console.error(
+          '❌ Thumbnail failed',
+          e
+        );
+      }
+
+      resolve();
+    };
+
+  reader.readAsDataURL(blob);
+});
+
+  reader.readAsDataURL(
+    blob
+  );
+
+} catch (e) {
+
+  console.error(
+    '❌ Local thumbnail failed',
+    e
+  );
+}
+// 🔥 allow Dexie/UI flush
+localStorage.setItem(
+  'documents_updated',
+  Date.now().toString()
+);
+await new Promise(
+  resolve =>
+    setTimeout(resolve, 150)
+);
+console.log(
+  '💾 Local document saved'
+);
+// =====================================
+// OFFLINE ONLY
+// =====================================
+
+if (!navigator.onLine) {
+
+  console.log(
+    '📴 Saved for background sync'
+  );
+
+  continue;
+}
         // 📦 create encrypted file
         const encryptedFile =
           new File(
@@ -317,8 +613,8 @@ async upload() {
             file_type:
               file.type,
 
-            created_at:
-              new Date(),
+created_at:
+  new Date().toISOString()
           });
 
         // ✅ file completed
@@ -353,7 +649,10 @@ async upload() {
       this.router.navigateByUrl(
         '/dashboard'
       );
-
+localStorage.setItem(
+  'force_sync',
+  'true'
+);
     }, 800);
 
   } catch (e) {

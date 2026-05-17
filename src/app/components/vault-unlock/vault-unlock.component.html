@@ -40,7 +40,7 @@
 
   <div class="actions">
 
-<ion-button
+<!-- <ion-button
   (click)="unlock()"
   [disabled]="isUnlocking">
 
@@ -52,8 +52,21 @@
 
   {{ isUnlocking ? 'Unlocking...' : 'Unlock' }}
 
-</ion-button>
+</ion-button> -->
+<ion-button
+  (click)="unlock()"
+  [disabled]="isUnlocking">
 
+  <div
+    class="unlock-pulse"
+    *ngIf="isUnlocking">
+  </div>
+
+  {{ isUnlocking
+      ? 'Unlocking...'
+      : 'Unlock' }}
+
+</ion-button>
     <ion-button
       fill="clear"
       (click)="cancel()">

@@ -3,7 +3,8 @@ import {
   Component,
   OnInit
 } from '@angular/core';
-
+import { AuthService }
+from 'src/app/services/auth.service';
 import {
   Router
 } from '@angular/router';
@@ -19,17 +20,50 @@ export class SplashPage
 implements OnInit {
 
   constructor(
-    private router: Router
+    private router: Router,
+  private authService:
+    AuthService
   ) {}
 
-  ngOnInit() {
+async ngOnInit() {
 
-    setTimeout(() => {
+  // small splash delay
 
-      this.router.navigateByUrl(
-        '/login'
-      );
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        1800
+      )
+  );
 
-    }, 2500);
+  // 🔐 restore session
+
+  const loggedIn =
+    await this.authService
+      .isLoggedIn();
+
+  // ✅ session exists
+
+  if (loggedIn) {
+
+    this.router.navigateByUrl(
+      '/dashboard',
+      {
+        replaceUrl: true
+      }
+    );
+
+    return;
   }
+
+  // ❌ no session
+
+  this.router.navigateByUrl(
+    '/login',
+    {
+      replaceUrl: true
+    }
+  );
+}
 }

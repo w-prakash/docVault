@@ -6,7 +6,7 @@ import * as CryptoJS from 'crypto-js';
 })
 export class SupabaseService {
 
-  private supabase: SupabaseClient;
+  public supabase: SupabaseClient;
 
   constructor() {
     this.supabase = createClient(
@@ -63,9 +63,11 @@ export class SupabaseService {
 
   // 📄 SAVE METADATA (DB)
   async saveRecord(record: any) {
-    return await this.supabase
-      .from('records')
-      .insert([record]);
+ return await this.supabase
+  .from('records')
+  .insert([record])
+  .select()
+  .single();
   }
 
   // 📥 GET DOCUMENTS

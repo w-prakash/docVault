@@ -1,5 +1,12 @@
+// app.component.ts
+
 import { Component } from '@angular/core';
-import { VaultService } from './services/vault.service';
+
+import { VaultService }
+from './services/vault.service';
+
+import { AuthService }
+from './services/auth.service';
 
 @Component({
   selector: 'app-root',
@@ -7,27 +14,46 @@ import { VaultService } from './services/vault.service';
   styleUrls: ['app.component.scss'],
   standalone: false,
 })
+
 export class AppComponent {
+
   showVaultLock = false;
-  constructor(  private vaultService: VaultService
-) {}
 
-ngOnInit() {
+  constructor(
 
-  this.vaultService.onLockChange(
-    (locked) => {
+    public vaultService:
+      VaultService,
 
-      if (locked) {
+    private authService:
+      AuthService
+  ) {}
 
-        this.showVaultLock = true;
+  ngOnInit() {
 
-        setTimeout(() => {
+    this.vaultService.onLockChange(
+      (locked) => {
 
-          this.showVaultLock = false;
+        if (locked) {
 
-        }, 1600);
+          this.showVaultLock = true;
+
+          setTimeout(() => {
+
+            this.showVaultLock = false;
+
+          }, 1600);
+        }
       }
-    }
-  );
-}
+    );
+  }
+
+  // =====================================
+  // LOGOUT
+  // =====================================
+
+  async logout() {
+
+    await this.authService
+      .logout();
+  }
 }

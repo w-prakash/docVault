@@ -50,3 +50,21 @@
 // .widget:active {
 //   transform: scale(0.95);
 // }
+
+.app-header ion-toolbar {
+
+  --background:
+    rgba(10,16,28,0.85);
+
+  --border-color:
+    rgba(255,255,255,0.05);
+
+  --color: white;
+
+  backdrop-filter: blur(16px);
+}
+
+ion-menu-button {
+
+  color: white;
+}
