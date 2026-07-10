@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { IonicModule, ActionSheetController } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -12,7 +12,11 @@ import {
   DomSanitizer
 } from '@angular/platform-browser';
 import { OfflineVaultService } from '../services/offline-vault.service';
-
+import * as pdfjsLib from 'pdfjs-dist';
+(pdfjsLib as any)
+  .GlobalWorkerOptions
+  .workerSrc =
+    'assets/pdf.worker.min.js';
 @Component({
   selector: 'app-upload',
   standalone: true,
@@ -20,7 +24,7 @@ import { OfflineVaultService } from '../services/offline-vault.service';
   templateUrl: './upload.page.html',
   styleUrls: ['./upload.page.scss'],
 })
-export class UploadPage {
+export class UploadPage  implements OnDestroy {
 
   // 🔹 DB driven dropdowns
   members: any[] = [];
@@ -69,6 +73,31 @@ uploadMessage = '';
 
 async loadMembers() {
 
+  // ─────────────────────────────
+  // LOAD LOCAL FIRST
+  // ─────────────────────────────
+
+  const localMembers =
+    await this.offlineVault
+      .getMembers();
+
+  // ✅ USE CACHE
+  if (localMembers.length) {
+
+    console.log(
+      '⚡ Using cached members'
+    );
+
+    this.members =
+      localMembers;
+
+    return;
+  }
+
+  // ─────────────────────────────
+  // FETCH ONLINE ONLY IF EMPTY
+  // ─────────────────────────────
+
   try {
 
     console.log(
@@ -86,38 +115,54 @@ async loadMembers() {
       throw error;
     }
 
-    // ✅ UI
     this.members =
       data || [];
 
-    // 💾 CACHE OFFLINE
+    // 💾 CACHE
     await this.offlineVault
       .saveMembers(
         this.members
       );
 
     console.log(
-      '✅ Members cached offline'
+      '✅ Members cached'
     );
 
   } catch (e) {
 
-    console.warn(
-      '⚠️ Loading offline members'
-    );
-
-    // 📦 OFFLINE
-    this.members =
-      await this.offlineVault
-        .getMembers();
-
-    console.log(
-      '✅ Offline members loaded'
+    console.error(
+      '❌ Members load failed',
+      e
     );
   }
 }
 
 async loadCategories() {
+
+  // ─────────────────────────────
+  // LOAD LOCAL FIRST
+  // ─────────────────────────────
+
+  const localCategories =
+    await this.offlineVault
+      .getCategories();
+
+  // ✅ USE CACHE
+  if (localCategories.length) {
+
+    console.log(
+      '⚡ Using cached categories'
+    );
+
+    this.categories =
+      localCategories;
+
+    return;
+  }
+
+  // ─────────────────────────────
+  // FETCH ONLINE ONLY IF EMPTY
+  // ─────────────────────────────
 
   try {
 
@@ -139,32 +184,51 @@ async loadCategories() {
     this.categories =
       data || [];
 
+    // 💾 CACHE
     await this.offlineVault
       .saveCategories(
         this.categories
       );
 
     console.log(
-      '✅ Categories cached offline'
+      '✅ Categories cached'
     );
 
   } catch (e) {
 
-    console.warn(
-      '⚠️ Loading offline categories'
-    );
-
-    this.categories =
-      await this.offlineVault
-        .getCategories();
-
-    console.log(
-      '✅ Offline categories loaded'
+    console.error(
+      '❌ Categories load failed',
+      e
     );
   }
 }
 
 async loadTypes() {
+
+  // ─────────────────────────────
+  // LOAD LOCAL FIRST
+  // ─────────────────────────────
+
+  const localTypes =
+    await this.offlineVault
+      .getTypes();
+
+  // ✅ USE CACHE
+  if (localTypes.length) {
+
+    console.log(
+      '⚡ Using cached types'
+    );
+
+    this.types =
+      localTypes;
+
+    return;
+  }
+
+  // ─────────────────────────────
+  // FETCH ONLINE ONLY IF EMPTY
+  // ─────────────────────────────
 
   try {
 
@@ -186,27 +250,21 @@ async loadTypes() {
     this.types =
       data || [];
 
+    // 💾 CACHE
     await this.offlineVault
       .saveTypes(
         this.types
       );
 
     console.log(
-      '✅ Types cached offline'
+      '✅ Types cached'
     );
 
   } catch (e) {
 
-    console.warn(
-      '⚠️ Loading offline types'
-    );
-
-    this.types =
-      await this.offlineVault
-        .getTypes();
-
-    console.log(
-      '✅ Offline types loaded'
+    console.error(
+      '❌ Types load failed',
+      e
     );
   }
 }
@@ -320,7 +378,61 @@ openLocalPreview(file: any) {
       type: blob.type,
     });
   }
+async generatePdfThumbnail(
+  url: string
+): Promise<string> {
 
+  const pdf =
+    await pdfjsLib
+      .getDocument(url)
+      .promise;
+
+  const page =
+    await pdf.getPage(1);
+
+  const viewport =
+    page.getViewport({
+      scale: 1
+    });
+
+  const canvas =
+    document.createElement(
+      'canvas'
+    );
+
+  const context =
+    canvas.getContext('2d');
+
+  if (!context) {
+
+    throw new Error(
+      'Canvas unavailable'
+    );
+  }
+
+  canvas.width =
+    viewport.width;
+
+  canvas.height =
+    viewport.height;
+
+  await (
+    page as any
+  ).render({
+
+    canvasContext:
+      context,
+
+    viewport,
+
+    canvas
+  }).promise;
+
+  return canvas.toDataURL(
+    'image/jpeg',
+    0.7
+  );
+}
 // 📤 Upload
 async upload() {
 
@@ -421,7 +533,7 @@ const localDoc = {
 
   type_id:
     this.selectedTypeId,
-
+local_file_name: localFileName,
   file_url:
     localFileName,
 original_name:
@@ -480,61 +592,106 @@ await this.offlineVault
 // LOCAL THUMBNAIL
 // =====================================
 
+// =====================================
+// LOCAL THUMBNAIL
+// =====================================
+
 try {
 
-  const blob =
-    new Blob(
-      [buffer],
-      {
-        type: file.type
+  // ─────────────────────────────
+  // IMAGE
+  // ─────────────────────────────
+
+  if (
+    file.type.startsWith(
+      'image/'
+    )
+  ) {
+
+    const reader =
+      new FileReader();
+
+    await new Promise<void>(
+      (resolve) => {
+
+        reader.onloadend =
+          async () => {
+
+            try {
+
+              const base64 = (
+                reader.result as string
+              ).split(',')[1];
+
+              await this.offlineVault
+                .saveThumbnail(
+                  localFileName + '.thumb',
+                  base64
+                );
+
+              console.log(
+                '🖼 Image thumbnail saved'
+              );
+
+            } catch (e) {
+
+              console.error(
+                '❌ Image thumbnail failed',
+                e
+              );
+            }
+
+            resolve();
+          };
+
+        reader.readAsDataURL(
+          file
+        );
       }
     );
+  }
 
-  const reader =
-    new FileReader();
+  // ─────────────────────────────
+  // PDF
+  // ─────────────────────────────
 
-await new Promise<void>((resolve) => {
+  else if (
+    file.type ===
+    'application/pdf'
+  ) {
 
-  const reader =
-    new FileReader();
+    const pdfUrl =
+      URL.createObjectURL(
+        file
+      );
 
-  reader.onloadend =
-    async () => {
+    try {
 
-      try {
-
-        const base64 =
-          (
-            reader.result as string
-          ).split(',')[1];
-
-        await this.offlineVault
-          .saveThumbnail(
-            localFileName + '.thumb',
-            base64
-          );
-
-        console.log(
-          '🖼 Local thumbnail saved'
+      const thumb =
+        await this.generatePdfThumbnail(
+          pdfUrl
         );
 
-      } catch (e) {
+      const base64 =
+        thumb.split(',')[1];
 
-        console.error(
-          '❌ Thumbnail failed',
-          e
+      await this.offlineVault
+        .saveThumbnail(
+          localFileName + '.thumb',
+          base64
         );
-      }
 
-      resolve();
-    };
+      console.log(
+        '📄 PDF thumbnail saved'
+      );
 
-  reader.readAsDataURL(blob);
-});
+    } finally {
 
-  reader.readAsDataURL(
-    blob
-  );
+      URL.revokeObjectURL(
+        pdfUrl
+      );
+    }
+  }
 
 } catch (e) {
 
@@ -568,54 +725,54 @@ if (!navigator.onLine) {
   continue;
 }
         // 📦 create encrypted file
-        const encryptedFile =
-          new File(
-            [encrypted],
-            file.name + '.enc',
-            {
-              type: 'text/plain'
-            }
-          );
+//         const encryptedFile =
+//           new File(
+//             [encrypted],
+//             file.name + '.enc',
+//             {
+//               type: 'text/plain'
+//             }
+//           );
 
-        // 📤 UPLOAD
-        this.uploadMessage =
-          `Uploading ${file.name}`;
+//         // 📤 UPLOAD
+//         this.uploadMessage =
+//           `Uploading ${file.name}`;
 
-        this.uploadProgress =
-          startProgress + 45;
+//         this.uploadProgress =
+//           startProgress + 45;
 
-        const filePath =
-          await this.supabaseService
-            .uploadFile(encryptedFile);
+//         const filePath =
+//           await this.supabaseService
+//             .uploadFile(encryptedFile);
 
-        // 💾 SAVE METADATA
-        this.uploadMessage =
-          `Saving ${file.name}`;
+//         // 💾 SAVE METADATA
+//         this.uploadMessage =
+//           `Saving ${file.name}`;
 
-        this.uploadProgress =
-          startProgress + 75;
+//         this.uploadProgress =
+//           startProgress + 75;
 
-        await this.supabaseService
-          .saveRecord({
+//         await this.supabaseService
+//           .saveRecord({
 
-            member_id:
-              this.selectedMemberId,
+//             member_id:
+//               this.selectedMemberId,
 
-            category_id:
-              this.selectedCategoryId,
+//             category_id:
+//               this.selectedCategoryId,
 
-            type_id:
-              this.selectedTypeId,
+//             type_id:
+//               this.selectedTypeId,
 
-            file_url:
-              filePath,
+//             file_url:
+//               filePath,
 
-            file_type:
-              file.type,
+//             file_type:
+//               file.type,
 
-created_at:
-  new Date().toISOString()
-          });
+// created_at:
+//   new Date().toISOString()
+//           });
 
         // ✅ file completed
         this.uploadProgress =
@@ -669,11 +826,46 @@ localStorage.setItem(
 }
 
 removeFile(index: number) {
+const preview =
+  this.selectedFilesPreview[index];
 
+if (preview?.url) {
+
+  URL.revokeObjectURL(
+    preview.url
+  );
+}
   this.files.splice(index, 1);
 
   this.selectedFileNames.splice(index, 1);
 
   this.selectedFilesPreview.splice(index, 1);
+}
+
+// ─────────────────────────────────────
+// CLEANUP OBJECT URLS
+// ─────────────────────────────────────
+
+ngOnDestroy() {
+
+  for (const file of this.selectedFilesPreview) {
+
+    try {
+
+      if (file.url) {
+
+        URL.revokeObjectURL(
+          file.url
+        );
+      }
+
+    } catch (e) {
+
+      console.warn(
+        '⚠️ URL cleanup failed',
+        e
+      );
+    }
+  }
 }
 }

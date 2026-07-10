@@ -1,6 +1,5 @@
 <!-- <ion-content class="doc-bg"> -->
 <ion-content
-  fullscreen="true"
   class="doc-bg documents-content">
 
   <!-- REFRESH -->
@@ -240,20 +239,13 @@
   </div>
 
 <img
-  *ngIf="
-    doc.preview &&
-    doc.preview.length > 0
-  "
-  [src]="doc.preview"
-  class="document-preview"
+  *ngIf="doc.preview"
+[src]="doc.preview || ''"  class="document-preview"
   loading="lazy"
 />
 <div
   class="thumb-placeholder"
-  *ngIf="
-    !doc.preview ||
-    doc.preview.length === 0
-  ">
+  *ngIf="!doc.preview">
 
   <ion-icon
     name="document-outline">
@@ -301,12 +293,15 @@
         />
 
         <!-- PDF -->
-        <iframe 
-          *ngIf="isPdf"
-          [src]="safeUrl"
-          class="preview-frame">
-        </iframe>
+<iframe 
+  *ngIf="isPdf"
+  [src]="safeUrl"
+  type="application/pdf"
+  class="preview-frame"
 
+  (load)="onPdfLoad()"
+  (error)="onPdfError()">
+</iframe>
       </ion-content>
 
     </ng-template>

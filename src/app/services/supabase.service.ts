@@ -24,28 +24,66 @@ export class SupabaseService {
   }
 
   // 📤 UPLOAD FILE (SECURE)
-  async uploadFile(file: File) {
-    const { data: userData } = await this.supabase.auth.getUser();
-    const userId = userData.user?.id;
+// 📤 UPLOAD FILE (SECURE)
 
-    if (!userId) {
-      throw new Error('User not logged in');
-    }
+async uploadFile(
+  file: File
+) {
 
-    // 🔥 user folder + unique filename
-    const filePath = `${userId}/${Date.now()}_${file.name}`;
+  const {
+    data: userData
+  } =
+    await this.supabase
+      .auth
+      .getUser();
 
-    const { data, error } = await this.supabase.storage
-      .from('documents')
-      .upload(filePath, file);
+  const userId =
+    userData.user?.id;
 
-    if (error) {
-      console.error('Upload error:', error);
-      throw error;
-    }
+  if (!userId) {
 
-    return filePath; // 🔥 IMPORTANT (store this in DB)
+    throw new Error(
+      'User not logged in'
+    );
   }
+
+  // ✅ KEEP ORIGINAL ENCRYPTED NAME
+  const filePath =
+    `${userId}/${file.name}`;
+
+  console.log(
+    '☁️ UPLOADING:',
+    filePath
+  );
+
+  const {
+    error
+  } =
+    await this.supabase
+      .storage
+      .from('documents')
+      .upload(
+        filePath,
+        file,
+        {
+
+          // ✅ overwrite same file safely
+          upsert: true
+        }
+      );
+
+  if (error) {
+
+    console.error(
+      'Upload error:',
+      error
+    );
+
+    throw error;
+  }
+
+  return filePath;
+}
 
   // 🔗 SIGNED URL (SECURE ACCESS)
   async getSignedUrl(path: string) {
@@ -71,8 +109,12 @@ export class SupabaseService {
   }
 
   // 📥 GET DOCUMENTS
-  async getDocuments() {
-    return await this.supabase
+async getDocuments(
+  lastSync?: string
+) {
+
+  let query =
+    this.supabase
       .from('records')
       .select(`
         id,
@@ -82,9 +124,23 @@ export class SupabaseService {
         categories(name),
         file_type,
         types(name)
-      `)
-      .order('created_at', { ascending: false });
+      `);
+
+  // ✅ fetch only newer docs
+  if (lastSync) {
+
+    query =
+      query.gt(
+        'created_at',
+        lastSync
+      );
   }
+
+  return await query.order(
+    'created_at',
+    { ascending: false }
+  );
+}
 
   // 📦 DELETE FILE FROM STORAGE
   async deleteFile(path: string) {

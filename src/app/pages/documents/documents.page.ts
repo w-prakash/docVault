@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { IonicModule, ActionSheetController } from '@ionic/angular';
 import { CommonModule } from '@angular/common';
 import { SupabaseService } from '../../services/supabase.service';
@@ -11,35 +11,48 @@ import { ToastController } from '@ionic/angular';
 import { decryptData } from 'src/app/utils/encryption.util';
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.js';
 import { VaultService } from '../../services/vault.service';
+import { OfflineVaultService } from 'src/app/services/offline-vault.service';
+import { Router } from '@angular/router';
+import { SyncStatusService } from 'src/app/services/sync-status';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+import {
+  ChangeDetectorRef
+} from '@angular/core';
 import {
   Filesystem,
   Directory
 } from '@capacitor/filesystem';
-import {
-  OfflineVaultService
-} from 'src/app/services/offline-vault.service';
+
 import {
   Share
 } from '@capacitor/share';
-import { Router } from '@angular/router';
-import { SyncStatusService } from 'src/app/services/sync-status';
-// ✅ TYPES (IMPORTANT)
-type Member = { name: string };
-type Category = { name: string };
-type TypeItem = { name: string };
+import { Capacitor } from '@capacitor/core';
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface DocumentItem {
-  id: string;
-  file_url: string;
+  id: number;                  // Dexie auto-increment key
+  server_id?: string | null;   // Supabase record id (set after sync)
+  file_url: string;            // local filename OR server storage path
   created_at: string;
   file_type?: string;
-  members?: any;      // ✅ keep array
+  members?: any;
   categories?: any;
   types?: any;
-  isDeleting?: boolean; // ✅ ADD THIS
-  isRestoring?: boolean; // ✅ add this
-
+  isDeleting?: boolean;
+  isRestoring?: boolean;
   preview?: string;
+  local_path?: string | null;
+  local_file_name?: string;
+  local_only?: boolean;
+  synced?: boolean;
+  sync_pending?: boolean;
+  sync_failed?: boolean;
+  member_id?: string;
+  category_id?: string;
+  type_id?: string;
+  original_name?: string;
+  thumbnail_path?: string;
 }
 
 @Component({
@@ -49,1440 +62,1318 @@ interface DocumentItem {
   templateUrl: './documents.page.html',
   styleUrls: ['./documents.page.scss'],
 })
-export class DocumentsPage {
-  pendingDelete: any = null;
-deleteTimeout: any;
-sortOrder: string = 'latest';
-suggestions: string[] = [];
+export class DocumentsPage implements OnDestroy {
+
+  // ── Public state ───────────────────────────────────────────────────────────
+
   documents: DocumentItem[] = [];
-isLoading = true;
+  allDocuments: DocumentItem[] = [];
+  members: any[] = [];
+  categories: any[] = [];
+  types: any[] = [];
+  allTypes: any[] = [];
+
+  selectedMember: string = '';
+  selectedCategory: string = '';
+  selectedType: string = '';
+  searchText: string = '';
+  sortOrder: string = 'latest';
+  suggestions: string[] = [];
+
+  isLoading = true;
+  isSyncing = false;
+  syncMessage = '';
+  isOnlineState = true;
+  lastSync = '';
+
   selectedDocUrl: string = '';
   safeUrl!: SafeResourceUrl;
   isPreviewOpen = false;
   isPdf = false;
-allDocuments: any[] = [];
-members: any[] = [];
-categories: any[] = [];
-selectedMember: string = '';
-selectedCategory: string = '';
-types: any[] = [];
-allTypes:any[] = [];   // full list
-selectedType: string = '';
-searchText: string = '';
-isSyncing = false;
-syncMessage = '';
-isOnlineState = true;
-lastSync = '';
-private isSyncRunning =
-  false;
+
+  pendingDelete: DocumentItem | null = null;
+  deleteTimeout: any;
+  // ── Private ────────────────────────────────────────────────────────────────
+
+  /**
+   * Blob URLs created during sync (for thumbnail generation).
+   * All are revoked in ngOnDestroy to prevent memory leaks.
+   */
+  private syncBlobUrls: string[] = [];
+
+  /** Prevents concurrent sync runs. */
+  private isSyncRunning = false;
+private isQueueProcessing = false;
+  /** Completes on destroy to auto-unsubscribe all observables. */
+  private destroy$ = new Subject<void>();
+
+  // ── Constructor ────────────────────────────────────────────────────────────
+
   constructor(
-private offlineVault:
-  OfflineVaultService,
+    private offlineVault: OfflineVaultService,
     private supabaseService: SupabaseService,
     private sanitizer: DomSanitizer,
     private actionSheetCtrl: ActionSheetController,
-      private alertCtrl: AlertController,
+    private alertCtrl: AlertController,
     private location: Location,
     private router: Router,
-    private syncStatus:
-  SyncStatusService,
+    private syncStatus: SyncStatusService,
     private vaultService: VaultService,
-    private toastCtrl: ToastController
+    private toastCtrl: ToastController,
+    private cdr: ChangeDetectorRef
   ) {}
 
-async ngOnInit() {
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
-  // =====================================
-  // SYNC STATUS SUBSCRIPTIONS
-  // =====================================
+  async ngOnInit() {
+    // Subscribe with auto-cleanup on destroy
+    this.syncStatus.isOnline$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(v => { this.isOnlineState = v; });
 
-  this.syncStatus
-    .isOnline$
-    .subscribe(value => {
-      console.log("value....", value);
+    this.syncStatus.isSyncing$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(v => { this.isSyncing = v; });
 
-      this.isOnlineState =
-        value;
-    });
+    this.syncStatus.syncMessage$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(v => { this.syncMessage = v; });
 
-  this.syncStatus
-    .isSyncing$
-    .subscribe(value => {
+    this.syncStatus.lastSync$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(v => { this.lastSync = v; });
 
-      this.isSyncing =
-        value;
-    });
+    if (!navigator.onLine) {
+      // ── Offline bootstrap ──────────────────────────────────────────────────
+      this.members    = await this.offlineVault.getMembers();
+      this.categories = await this.offlineVault.getCategories();
+      this.allTypes   = await this.offlineVault.getTypes();
+      this.types      = [...this.allTypes];
+      await this.loadOfflineDocuments();
+      return;
+    }
 
-  this.syncStatus
-    .syncMessage$
-    .subscribe(value => {
+    // ── Online bootstrap ───────────────────────────────────────────────────
+    // Non-blocking: process any queued offline uploads in the background
+    // this.processSyncQueue();
+await this.loadMasterData();
+  }
 
-      this.syncMessage =
-        value;
-    });
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+    this.revokeSyncBlobUrls();
+  }
 
-  this.syncStatus
-    .lastSync$
-    .subscribe(value => {
+  async ionViewWillEnter() {
+    await this.loadDocuments();
+  }
 
-      this.lastSync =
-        value;
-    });
 
-  console.log(
-    '🌐 ONLINE?',
-    this.isOnline()
-  );
+// ─────────────────────────────────────
+// LOAD MASTER DATA
+// ─────────────────────────────────────
 
-  // =====================================
-  // OFFLINE MODE
-  // =====================================
+async loadMasterData() {
 
-  if (!this.isOnline()) {
+  try {
 
-    console.log(
-      '📴 OFFLINE MODE'
-    );
+    // ─────────────────────────────
+    // LOAD CACHE FIRST
+    // ─────────────────────────────
 
-    // 📦 members
     this.members =
       await this.offlineVault
         .getMembers();
 
-    // 📦 categories
     this.categories =
       await this.offlineVault
         .getCategories();
 
-    // 📦 types
     this.allTypes =
       await this.offlineVault
         .getTypes();
 
-    this.types =
-      this.allTypes;
-
-    // 📄 local docs
-    await this.loadOfflineDocuments();
-
-    return;
-  }
-
-  // =====================================
-  // ONLINE MODE
-  // =====================================
-
-  console.log(
-    '🌐 ONLINE MODE'
-  );
-         this.processSyncQueue();
-
-  // 🔄 syncing start
-  this.syncStatus
-    .setSyncing(
-      true,
-      'Syncing documents...'
-    );
-
-  // =========================
-  // TYPES
-  // =========================
-
-  const {
-    data: typesData
-  } =
-    await this.supabaseService
-      .getAllTypes();
-
-  if (typesData) {
-
-    this.allTypes =
-      typesData;
-
-    this.types =
-      typesData;
-
-    await this.offlineVault
-      .saveTypes(
-        typesData
-      );
-  }
-
-  // =========================
-  // MEMBERS
-  // =========================
-
-  const {
-    data: membersData
-  } =
-    await this.supabaseService
-      .getMembers();
-
-  if (membersData) {
-
-    this.members =
-      membersData;
-
-    await this.offlineVault
-      .saveMembers(
-        membersData
-      );
-  }
-
-  // =========================
-  // CATEGORIES
-  // =========================
-
-  const {
-    data: categoryData
-  } =
-    await this.supabaseService
-      .getCategories();
-
-  if (categoryData) {
-
-    this.categories =
-      categoryData;
-
-    await this.offlineVault
-      .saveCategories(
-        categoryData
-      );
-  }
-
-  // =====================================
-  // SYNC COMPLETE
-  // =====================================
-
-  this.syncStatus
-    .setSyncing(false);
-
-  this.syncStatus
-    .setLastSyncNow();
-  //   window.addEventListener(
-  // 'storage',
-  // async (event) => {
-
-  //   if (
-  //     event.key ===
-  //     'documents_updated'
-  //   ) {
-
-  //     console.log(
-  //       '🔄 Documents refresh trigger'
-  //     );
-
-  //     await this.loadOfflineDocuments();
-  //   }
-  // }
-// );
-}
-// =====================================
-// INTERNET CHECK
-// =====================================
-
-isOnline(): boolean {
-
-  return navigator.onLine;
-}
-  // =====================================
-// MAIN LOAD
-// =====================================
-
-  async ionViewWillEnter() {
-    // =========================
-  // DOCUMENTS
-  // =========================
-// this.processSyncQueue();
-  // 🔒 vault locked
-
-    // const key =
-    //   await this.vaultService
-    //     .getVaultKey();
-
-    // if (!key) {
-
-    //   this.router.navigateByUrl(
-    //     '/dashboard'
-    //   );
-
-    //   return;
-    // }
-const key =
-  this.vaultService
-    .currentKey;
-  // 🔓 unlocked
-
-  await this.loadDocuments();
-}
-async loadDocuments() {
-
-  this.isLoading = true;
-
-  // ⚡ instant local docs
-  await this.loadOfflineDocuments();
-
-  this.isLoading = false;
-
-  // 🌐 run silently in background
-if (navigator.onLine && this.shouldSync()) {
-
-  this.syncOnlineDocuments();
-}}
-
-// ✅ LOAD DOCUMENTS
-async syncOnlineDocuments() {
-// =====================================
-// PREVENT MULTIPLE SYNC
-// =====================================
-
-if (this.isSyncRunning) {
-
-  console.log(
-    '⏳ Sync already running'
-  );
-
-  return;
-}
-
-this.isSyncRunning = true;
-  this.syncStatus
-    .setSyncing(
-      true,
-      'Syncing documents...'
-    );
-
-  try {
+    this.types = [
+      ...this.allTypes
+    ];
 
     console.log(
-      '🌐 Loading online docs'
+      '⚡ Loaded master data from cache'
     );
 
-    const { data } =
-      await this.supabaseService
-        .getDocuments();
+    // ─────────────────────────────
+    // OFFLINE STOP
+    // ─────────────────────────────
 
-    if (!data) {
-
-      throw new Error(
-        'No data'
-      );
+    if (!navigator.onLine) {
+      return;
     }
 
-    const key =
-      this.vaultService
-        .currentKey;
+    // ─────────────────────────────
+    // CACHE EXISTS → NO API
+    // ─────────────────────────────
 
-    const totalDocs =
-      data.length;
-
-    let processedDocs = 0;
-
-    const result:
-      DocumentItem[] = [];
-
-    const offlineDocs:
-      any[] = [];
-
-    // =====================================
-    // PROCESS DOCUMENTS
-    // =====================================
-
-    for (
-      const doc of data as DocumentItem[]
+    if (
+      this.members.length &&
+      this.categories.length &&
+      this.allTypes.length
     ) {
 
-      try {
-
-        const signedUrl =
-          await this.supabaseService
-            .getSignedUrl(
-              doc.file_url
-            );
-
-        if (!signedUrl) {
-          continue;
-        }
-
-        const res =
-          await fetch(
-            signedUrl
-          );
-
-        const encryptedText =
-          await res.text();
-
-        // =====================================
-        // FILE NAME
-        // =====================================
-
-        const fileName =
-          doc.file_url
-            .split('/')
-            .pop();
-
-        if (!fileName) {
-          continue;
-        }
-
-        // =====================================
-        // CACHE CHECK
-        // =====================================
-
-        const alreadyCached =
-          await this.offlineVault
-            .fileExists(
-              fileName
-            );
-
-        // =====================================
-        // ALREADY CACHED
-        // =====================================
-
-        if (alreadyCached) {
-
-          console.log(
-            '⚡ Using existing cache',
-            fileName
-          );
-
-          const thumb =
-            await this.offlineVault
-              .readThumbnail(
-                fileName + '.thumb'
-              );
-
-          if (thumb) {
-
-            doc.preview =
-              `data:image/jpeg;base64,${thumb}`;
-          }
-
-          result.push(doc);
-
-          processedDocs++;
-
-          this.syncStatus
-            .setSyncing(
-              true,
-              `Syncing ${processedDocs}/${totalDocs} documents...`
-            );
-            const originalName =
-  fileName
-    .split('_')
-    .slice(1)
-    .join('_')
-    .replace('.enc', '');
-
-          offlineDocs.push({
-
-            ...doc,
-original_name:
-  originalName,
-            local_path:
-              `vault/${fileName}`,
-
-            thumbnail_path:
-              `thumbnails/${fileName}.thumb`,
-
-            synced: true,
-
-            local_only: false,
-
-            sync_pending: false,
-
-            sync_failed: false
-          });
-
-          continue;
-        }
-
-        // =====================================
-        // SAVE ENCRYPTED FILE
-        // =====================================
-
-        const localPath =
-          await this.offlineVault
-            .saveEncryptedFile(
-              fileName,
-              encryptedText
-            );
-
-        console.log(
-          '✅ Cached locally'
-        );
-
-        // =====================================
-        // DECRYPT
-        // =====================================
-
-        const decrypted =
-          decryptData(
-            encryptedText,
-            key
-          );
-
-        const safeBuffer =
-          new Uint8Array(
-            decrypted
-          ).buffer;
-
-        const blob =
-          new Blob(
-            [safeBuffer],
-            {
-              type:
-                doc.file_type ||
-                'application/octet-stream'
-            }
-          );
-
-// =====================================
-// TEMP URL
-// =====================================
-
-const url =
-  URL.createObjectURL(blob);
-
-// =====================================
-// USE CACHED THUMB
-// =====================================
-
-const thumb =
-  await this.offlineVault
-    .readThumbnail(
-      fileName + '.thumb'
-    );
-
-if (thumb) {
-
-  doc.preview =
-    `data:image/jpeg;base64,${thumb}`;
-
-} else {
-
-  // fallback only
-
-  doc.preview = url;
-}
-
-        // =====================================
-        // SAVE THUMBNAIL
-        // =====================================
-
-        try {
-
-          const response =
-            await fetch(url);
-
-          const blob =
-            await response.blob();
-
-          await new Promise<void>((resolve) => {
-
-            const reader =
-              new FileReader();
-
-            reader.onloadend =
-              async () => {
-
-                try {
-
-                  const base64 =
-                    (
-                      reader.result as string
-                    ).split(',')[1];
-
-                  await this.offlineVault
-                    .saveThumbnail(
-                      fileName + '.thumb',
-                      base64
-                    );
-
-                } catch (e) {
-
-                  console.error(
-                    '❌ Thumbnail cache error',
-                    e
-                  );
-                }
-
-                resolve();
-              };
-
-            reader.readAsDataURL(
-              blob
-            );
-          });
-
-        } catch (e) {
-
-          console.error(
-            '❌ Thumbnail cache error',
-            e
-          );
-        }
-
-        // =====================================
-        // PDF THUMBNAIL
-        // =====================================
-
-        if (
-          doc.file_url
-            .toLowerCase()
-            .includes('.pdf')
-        ) {
-
-          this.generatePdfThumbnail(
-            url
-          )
-          .then((thumb) => {
-
-            doc.preview =
-              thumb;
-          })
-          .catch(() => {});
-        }
-
-        result.push(doc);
-
-        // =====================================
-        // OFFLINE METADATA
-        // =====================================
-
-// =====================================
-// OFFLINE METADATA
-// =====================================
-
-const originalName =
-  fileName
-    .split('_')
-    .slice(1)
-    .join('_')
-    .replace('.enc', '');
-
-offlineDocs.push({
-
-  ...doc,
-
-  original_name:
-    originalName,
-
-  local_path:
-    localPath,
-
-  thumbnail_path:
-    `thumbnails/${fileName}.thumb`,
-
-  synced: true,
-
-  local_only: false,
-
-  sync_pending: false,
-
-  sync_failed: false
-});
-
-      } catch (e) {
-
-        console.error(
-          'Preview failed',
-          e
-        );
-      }
+      console.log(
+        '✅ Master cache already exists'
+      );
+
+      return;
     }
 
-    // =====================================
-    // UPSERT SERVER DOCS ONLY
-    // =====================================
+    // ─────────────────────────────
+    // FETCH ONLINE ONLY IF EMPTY
+    // ─────────────────────────────
 
-    for (const doc of offlineDocs) {
-
-      const existing =
-        await this.offlineVault
-          .documents
-.where('original_name')
-.equals(doc.original_name)
-          .first();
-
-if (!existing) {
-
-  // ✅ add new server doc
-
-  await this.offlineVault
-    .saveLocalDocument(
-      doc
+    console.log(
+      '🌐 Fetching master data'
     );
 
-} else if (
-  existing.local_only
-) {
+    const [
+      typesRes,
+      membersRes,
+      categoriesRes
+    ] = await Promise.all([
 
-  // ✅ replace local temp doc
-  // with synced server doc
+      this.supabaseService
+        .getAllTypes(),
 
-  await this.offlineVault
-    .documents
-    .update(
-      existing.id,
-      {
+      this.supabaseService
+        .getMembers(),
 
-        ...doc,
+      this.supabaseService
+        .getCategories()
+    ]);
 
-        synced: true,
+    if (typesRes.data) {
 
-        local_only: false,
+      this.allTypes =
+        typesRes.data;
 
-        sync_pending: false,
+      this.types =
+        [...typesRes.data];
 
-        sync_failed: false
-      }
-    );
-}
-    }
-
-    // =====================================
-    // ALWAYS LOAD FRESH DEXIE STATE
-    // =====================================
-
-    const freshDocs =
       await this.offlineVault
-        .getDocuments();
-
-// =====================================
-// RESTORE THUMBNAILS
-// =====================================
-
-for (const doc of freshDocs) {
-
-  try {
-
-    const fileName =
-      doc.file_url
-        ?.split('/')
-        ?.pop();
-
-    if (!fileName) {
-      continue;
-    }
-
-    const thumb =
-      await this.offlineVault
-        .readThumbnail(
-          fileName + '.thumb'
+        .saveTypes(
+          typesRes.data
         );
-
-    if (thumb) {
-
-      doc.preview =
-        `data:image/jpeg;base64,${thumb}`;
     }
+
+    if (membersRes.data) {
+
+      this.members =
+        membersRes.data;
+
+      await this.offlineVault
+        .saveMembers(
+          membersRes.data
+        );
+    }
+
+    if (categoriesRes.data) {
+
+      this.categories =
+        categoriesRes.data;
+
+      await this.offlineVault
+        .saveCategories(
+          categoriesRes.data
+        );
+    }
+
+    console.log(
+      '✅ Master data synced'
+    );
 
   } catch (e) {
 
     console.error(
-      '❌ Thumb restore failed',
+      '❌ Master data load failed',
       e
     );
   }
 }
 
-// =====================================
-// UPDATE UI
-// =====================================
+  // ── Load ───────────────────────────────────────────────────────────────────
+async loadDocuments() {
 
-this.documents =
-  [...freshDocs];
+  this.isLoading = true;
 
-this.allDocuments =
-  [...freshDocs];
+  // ─────────────────────────────
+  // LOAD LOCAL FIRST
+  // ─────────────────────────────
 
-  } catch (e) {
-this.isSyncRunning = false;
-    console.warn(
-      '⚠️ Loading offline docs'
-    );
+  await this.loadOfflineDocuments();
 
-    this.documents =
-      await this.offlineVault
-        .getDocuments();
+  this.isLoading = false;
+const localCount =
+  await this.offlineVault
+    .documents
+    .count();
 
-    this.allDocuments =
-      this.documents;
+console.log(
+  '📦 LOCAL DOC COUNT:',
+  localCount
+);
+  // ─────────────────────────────
+  // ONLINE SYNC
+  // ─────────────────────────────
+
+if (
+
+  navigator.onLine &&
+
+  (
+    localCount === 0 ||
+
+    this.shouldSync()
+  ) &&
+
+  !this.isSyncRunning &&
+
+  !this.isQueueProcessing
+){
+
+    // 1️⃣ upload pending queue
+    await this.processSyncQueue();
+
+    // 2️⃣ fetch latest server docs
+    await this.syncOnlineDocuments();
+
+    // 3️⃣ FINAL SINGLE UI REFRESH
+    await this.loadOfflineDocuments();
   }
-
-  this.syncStatus
-    .setSyncing(false);
-
-  this.syncStatus
-    .setLastSyncNow();
-
-  localStorage.setItem(
-    'last_sync_time',
-    Date.now().toString()
-  );
-  this.isSyncRunning = false;
 }
+// async loadDocuments() {
+
+//   this.isLoading = true;
+
+//   // ─────────────────────────────
+//   // LOAD LOCAL FIRST
+//   // ─────────────────────────────
+
+//   await this.loadOfflineDocuments();
+
+//   this.isLoading = false;
+
+//   // ─────────────────────────────
+//   // OFFLINE STOP
+//   // ─────────────────────────────
+
+//   if (!navigator.onLine) {
+//     return;
+//   }
+
+//   // ─────────────────────────────
+//   // PROCESS QUEUE FIRST
+//   // ─────────────────────────────
+
+//   await this.processSyncQueue();
+
+//   // ─────────────────────────────
+//   // THEN SERVER SYNC
+//   // ─────────────────────────────
+
+//   if (this.shouldSync()) {
+
+//     await this.syncOnlineDocuments();
+//   }
+// }
+
+  // ── Online sync ────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────
+// ONLINE SYNC
+// ─────────────────────────────────────
+
 // async syncOnlineDocuments() {
-// this.syncStatus
-//   .setSyncing(
+
+//   if (this.isSyncRunning) {
+
+//     console.log(
+//       '⏳ Sync already running'
+//     );
+
+//     return;
+//   }
+
+//   this.isSyncRunning = true;
+
+//   this.syncStatus.setSyncing(
 //     true,
 //     'Syncing documents...'
 //   );
-//   // this.isLoading = true;
 
 //   try {
-
-//     console.log(
-//       '🌐 Loading online docs'
-//     );
 
 //     const { data } =
 //       await this.supabaseService
 //         .getDocuments();
 
 //     if (!data) {
+
 //       throw new Error(
-//         'No data'
+//         'No data returned'
 //       );
 //     }
 
-//     // const key =
-//     //   await this.vaultService
-//     //     .getVaultKey();
+//     const offlineDocs: any[] = [];
 
-//     // if (!key) {
+//     const totalDocs =
+//       data.length;
 
-//     //   this.router.navigateByUrl(
-//     //     '/dashboard'
-//     //   );
+//     let processed = 0;
 
-//     //   return;
-//     // }
-//     const key =
-//   this.vaultService
-//     .currentKey;
-// const totalDocs =
-//   data.length;
+//     // ─────────────────────────────────
+//     // METADATA ONLY
+//     // ─────────────────────────────────
 
-// let processedDocs = 0;
-//     const result:
-//       DocumentItem[] = [];
-
-// const offlineDocs: any[] = [];
-
-//     for (
-//       const doc of data as DocumentItem[]
-//     ) {
+//     for (const doc of data as any[]) {
 
 //       try {
-
-//         const signedUrl =
-//           await this.supabaseService
-//             .getSignedUrl(
-//               doc.file_url
-//             );
-
-//         if (!signedUrl) {
-//           continue;
-//         }
-
-//         const res =
-//           await fetch(
-//             signedUrl
-//           );
-
-//         const encryptedText =
-//           await res.text();
-
-//         // =====================================
-//         // CACHE ENCRYPTED FILE
-//         // =====================================
 
 //         const fileName =
 //           doc.file_url
-//             .split('/')
-//             .pop();
-// // =====================================
-// // SKIP IF ALREADY CACHED
-// // =====================================
+//             ?.split('/')
+//             ?.pop();
 
-// const alreadyCached =
-//   await this.offlineVault
-//     .fileExists(
-//       fileName!
-//     );
+//         if (!fileName) {
+//           continue;
+//         }
 
-// if (alreadyCached) {
+//         // ─────────────────────────────
+//         // CHECK LOCAL CACHE
+//         // ─────────────────────────────
 
-//   console.log(
-//     '⚡ Using existing cache',
-//     fileName
-//   );
+//         const exists =
+//           await this.offlineVault
+//             .fileExists(
+//               fileName
+//             );
 
-//   // 🔥 load thumbnail instantly
-//   const thumb =
-//     await this.offlineVault
-//       .readThumbnail(
-//         fileName + '.thumb'
-//       );
+//         // ─────────────────────────────
+//         // RESTORE THUMBNAIL
+//         // ─────────────────────────────
 
-//   if (thumb) {
+//         if (exists) {
 
-//     doc.preview =
-//       `data:image/jpeg;base64,${thumb}`;
-//   }
-
-//   result.push(doc);
-// processedDocs++;
-
-// this.syncStatus
-//   .setSyncing(
-//     true,
-//     `Syncing ${processedDocs}/${totalDocs} documents...`
-//   );
-      
-//   offlineDocs.push({
-
-//     ...doc,
-
-//     local_path:
-//       `vault/${fileName}`,
-
-//     thumbnail_path:
-//       `thumbnails/${fileName}.thumb`,
-
-//     synced: true
-//   });
-
-//   continue;
-// }
-//         let localPath:any = '';
-
-//         if (fileName) {
-
-//           localPath =
-//             await this.offlineVault
-//               .saveEncryptedFile(
-//                 fileName,
-//                 encryptedText
-//               );
-
-//           console.log(
-//             '✅ Cached locally'
+//           await this.attachThumbnail(
+//             doc,
+//             fileName
 //           );
 //         }
 
-//         // =====================================
-//         // DECRYPT FOR PREVIEW
-//         // =====================================
-
-//         const decrypted =
-//           decryptData(
-//             encryptedText,
-//             key
-//           );
-
-//         const safeBuffer =
-//           new Uint8Array(
-//             decrypted
-//           ).buffer;
-
-//         const isPdf =
-//           doc.file_url
-//             .toLowerCase()
-//             .includes('.pdf');
-
-//         const blob =
-//           new Blob(
-//             [safeBuffer],
-//             {
-//               type:
-//                 doc.file_type ||
-//                 'application/octet-stream'
-//             }
-//           );
-
-//         const url =
-//           URL.createObjectURL(
-//             blob
-//           );
-
-//         doc.preview = url;
-// // =====================================
-// // CACHE THUMBNAIL
-// // =====================================
-
-// try {
-
-//   const response =
-//     await fetch(url);
-
-//   const blob =
-//     await response.blob();
-
-// await new Promise<void>((resolve) => {
-
-//   const reader =
-//     new FileReader();
-
-//   reader.onloadend =
-//     async () => {
-
-//       try {
-
-//         const base64 =
-//           (
-//             reader.result as string
-//           ).split(',')[1];
-
-//         await this.offlineVault
-//           .saveThumbnail(
-//             fileName + '.thumb',
-//             base64
-//           );
-
-//       } catch (e) {
-
-//         console.error(
-//           '❌ Thumbnail cache error',
-//           e
-//         );
-//       }
-
-//       resolve();
-//     };
-
-//   reader.readAsDataURL(
-//     blob
-//   );
-// });
-
-// } catch (e) {
-
-//   console.error(
-//     '❌ Thumbnail cache error',
-//     e
-//   );
-// }
-//         if (isPdf) {
-
-//           this.generatePdfThumbnail(
-//             url
-//           )
-//           .then((thumb) => {
-
-//             doc.preview =
-//               thumb;
-//           })
-//           .catch(() => {});
-//         }
-//   result.push(doc);
-
-//         // =====================================
-//         // SAVE OFFLINE METADATA
-//         // =====================================
+//         // ─────────────────────────────
+//         // SAVE ONLY METADATA
+//         // ─────────────────────────────
 
 //         offlineDocs.push({
 
 //           ...doc,
 
+//           original_name:
+//             fileName
+//               .split('_')
+//               .slice(1)
+//               .join('_')
+//               .replace('.enc', ''),
+
 //           local_path:
-//             localPath,
-// thumbnail_path:
-//   `thumbnails/${fileName}`,
-//           synced: true
+//             exists
+//               ? `vault/${fileName}`
+//               : null,
+
+//           thumbnail_path:
+//             `thumbnails/${fileName}.thumb`,
+
+//           synced: true,
+
+//           local_only: false,
+
+//           sync_pending: false,
+
+//           sync_failed: false
 //         });
 
-//       } catch (e) {
+//         processed++;
+
+//         this.syncStatus.setSyncing(
+//           true,
+//           `Syncing ${processed}/${totalDocs}`
+//         );
+
+//       } catch (docErr) {
 
 //         console.error(
-//           'Preview failed',
-//           e
+//           '❌ Metadata sync failed',
+//           docErr
 //         );
 //       }
 //     }
 
-//     // 💾 SAVE TO DEXIE
-// // =====================================
-// // MERGE EXISTING LOCAL DOCS
-// // =====================================
+//     // ─────────────────────────────────
+//     // SAVE TO DEXIE
+//     // ─────────────────────────────────
 
-// const existingDocs: any[] =
-//   await this.offlineVault
-//     .getDocuments();
+//     for (const offlineDoc of offlineDocs) {
 
-// // keep local-only docs
+//       const existing =
+//         await this.offlineVault
+//           .documents
+//           .where('server_id')
+//           .equals(
+//             offlineDoc.id
+//           )
+//           .first();
 
-// const localOnlyDocs: any[] =
-//   existingDocs.filter(
-//     d => d.local_only
-//   );
+//       // NEW DOC
 
-// // merge server + local-only
+//       if (!existing) {
 
-// const mergedDocs = [
+//         await this.offlineVault
+//           .saveLocalDocument({
 
-//   ...offlineDocs,
+//             ...offlineDoc,
 
-//   ...localOnlyDocs.filter(
-//     local =>
-//       !offlineDocs.some(
-//         online =>
-//           online.file_url ===
-//           local.file_url
-//       )
-//   )
-// ];
+//             server_id:
+//               offlineDoc.id
+//           });
+//       }
 
-// // 💾 save merged docs
+//       // UPDATE EXISTING
 
-// await this.offlineVault
-//   .saveDocuments(
-//     mergedDocs
-//   );
+//       else {
 
-// console.log(
-//   '📦 OFFLINE DOCS',
-//   offlineDocs
-// );
+//         await this.offlineVault
+//           .documents
+//           .update(
+//             existing.id,
+//             {
 
-// // 🔥 silently update existing docs
+//               ...offlineDoc,
 
-// // =====================================
-// // MERGE LOCAL + ONLINE
-// // =====================================
+//               server_id:
+//                 offlineDoc.id
+//             }
+//           );
+//       }
+//     }
 
-// if (result.length > 0) {
+//     // ─────────────────────────────────
+//     // LOAD LOCAL DOCS
+//     // ─────────────────────────────────
 
-//   const existing =
-//     [...this.documents];
+//     await this.loadOfflineDocuments();
 
-//   const merged = [
-
-//     ...existing,
-
-//     ...result.filter(
-//       online =>
-//         !existing.some(
-//           local =>
-//             local.file_url ===
-//             online.file_url
-//         )
-//     )
-//   ];
-
-//   this.documents = merged;
-
-//   this.allDocuments = merged;
-// }
+//     console.log(
+//       '✅ Metadata sync completed'
+//     );
 
 //   } catch (e) {
 
-//     console.warn(
-//       '⚠️ Loading offline docs'
+//     console.error(
+//       '❌ Sync failed',
+//       e
 //     );
 
-//     // =====================================
-//     // OFFLINE FALLBACK
-//     // =====================================
+//   } finally {
 
-//     this.documents =
-//       await this.offlineVault
-//         .getDocuments();
+//     this.isSyncRunning = false;
 
-//     this.allDocuments =
-//       this.documents;
+//     this.syncStatus
+//       .setSyncing(false);
 
-//     console.log(
-//       '✅ Offline docs loaded'
+//     this.syncStatus
+//       .setLastSyncNow();
+
+//     localStorage.setItem(
+//       'last_sync_time',
+//       Date.now().toString()
 //     );
 //   }
-// this.syncStatus
-//   .setSyncing(false);
-
-// this.syncStatus
-//   .setLastSyncNow();
-//   localStorage.setItem(
-//   'last_sync_time',
-//   Date.now().toString()
-// );
-//   // this.isLoading = false;
 // }
 
-// =====================================
-// LOAD OFFLINE DOCS
-// =====================================
+// ─────────────────────────────────────
+// ONLINE SYNC
+// ─────────────────────────────────────
 
-// =====================================
-// LOAD OFFLINE DOCS
-// =====================================
+async syncOnlineDocuments() {
 
-// async loadOfflineDocuments() {
+  // ─────────────────────────────────
+  // PREVENT DUPLICATE SYNC
+  // ─────────────────────────────────
 
-//   this.isLoading = true;
+  if (this.isSyncRunning) {
 
-//   console.log(
-//     '📦 Loading local docs'
-//   );
+    console.log(
+      '⏳ Sync already running'
+    );
 
-//   const offlineDocs =
-//     await this.offlineVault
-//       .getDocuments();
-
-//   // =====================================
-//   // LOAD THUMBNAILS FIRST
-//   // =====================================
-
-//   for (const doc of offlineDocs) {
-
-//     try {
-
-//       const fileName =
-//         doc.file_url
-//           .split('/')
-//           .pop();
-
-//       if (!fileName) {
-//         continue;
-//       }
-
-//       // 🖼 cached thumbnail
-//       const thumb =
-//         await this.offlineVault
-//           .readThumbnail(
-//             fileName + '.thumb'
-//           );
-
-//       if (thumb) {
-
-//         doc.preview =
-//           `data:image/jpeg;base64,${thumb}`;
-//       }
-
-//     } catch (e) {
-
-//       console.error(
-//         '❌ Thumbnail load failed',
-//         e
-//       );
-//     }
-//   }
-
-//   // =====================================
-//   // UPDATE UI AFTER PREVIEWS READY
-//   // =====================================
-
-//   this.documents =
-//     [...offlineDocs];
-
-//   this.allDocuments =
-//     [...offlineDocs];
-
-//   this.isLoading = false;
-
-//   console.log(
-//     '✅ Local docs loaded'
-//   );
-// }
-async loadOfflineDocuments() {
-
-  this.isLoading = true;
-
-  console.log(
-    '📦 Loading local docs'
-  );
-
-  const offlineDocs =
-    await this.offlineVault
-      .getDocuments();
-offlineDocs.sort((a, b) => {
-
-  const dateA =
-    new Date(a.created_at).getTime();
-
-  const dateB =
-    new Date(b.created_at).getTime();
-
-  return dateB - dateA;
-});
-  // =====================================
-  // SHOW UI IMMEDIATELY
-  // =====================================
-
-  this.documents =
-    [...offlineDocs];
-
-  this.allDocuments =
-    [...offlineDocs];
-
-  this.isLoading = false;
-
-  console.log(
-    '✅ Local docs loaded'
-  );
-
-  // =====================================
-  // LOAD THUMBNAILS IN BACKGROUND
-  // =====================================
-
-  for (const doc of offlineDocs) {
-
-    try {
-
-      const fileName =
-        doc.file_url
-          .split('/')
-          .pop();
-
-      if (!fileName) {
-        continue;
-      }
-
-      const thumb =
-        await this.offlineVault
-          .readThumbnail(
-            fileName + '.thumb'
-          );
-
-      if (thumb) {
-
-        doc.preview =
-          `data:image/jpeg;base64,${thumb}`;
-
-        // 🔥 refresh UI progressively
-
-        this.documents = [
-          ...this.documents
-        ];
-      }
-
-    } catch (e) {
-
-      console.error(
-        '❌ Thumbnail load failed',
-        e
-      );
-    }
-  }
-}
-
-  // ✅ PDF THUMBNAIL
-  async generatePdfThumbnail(url: string): Promise<string> {
-    const pdf = await pdfjsLib.getDocument(url).promise;
-    const page = await pdf.getPage(1);
-
-    const viewport = page.getViewport({ scale: 1 });
-
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-
-    if (!context) throw new Error('Canvas error');
-
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    await (page as any).render({
-      canvasContext: context,
-      viewport,
-      canvas
-    }).promise;
-
-    return canvas.toDataURL();
+    return;
   }
 
-  // ✅ MENU
-async openMenu(doc: DocumentItem) {
+  this.isSyncRunning = true;
 
-  const sheet =
-    await this.actionSheetCtrl.create({
-
-      header: 'Options',
-
-      cssClass: 'vault-action-sheet',
-
-      buttons: [
-
-        {
-          text: 'View',
-          icon: 'eye-outline',
-          handler: () => this.viewDoc(doc)
-        },
-
-        {
-          text: 'Download',
-          icon: 'download-outline',
-          handler: () => this.downloadDoc(doc)
-        },
-
-        {
-          text: 'Share',
-          icon: 'share-social-outline',
-          handler: () => this.shareDoc(doc)
-        },
-
-        {
-          text: 'Delete',
-          role: 'destructive',
-          icon: 'trash-outline',
-          handler: () => this.confirmDelete(doc)
-        },
-
-        {
-          text: 'Cancel',
-          role: 'cancel',
-          icon: 'close-outline'
-        }
-
-      ]
-    });
-
-  await sheet.present();
-}
-
-  // ✅ VIEW
-// ✅ VIEW
-async viewDoc(doc: any) {
-
-  // 🔐 get vault key
-
-  const key =
-  this.vaultService
-    .currentKey;
-  // const key =
-  //   await this.vaultService
-  //     .getVaultKey();
-
-  // if (!key) {
-
-  //   this.router.navigateByUrl(
-  //     '/dashboard'
-  //   );
-
-  //   return;
-  // }
+  this.syncStatus.setSyncing(
+    true,
+    'Syncing documents...'
+  );
 
   try {
 
-    // =====================================
-    // READ LOCAL ENCRYPTED FILE
-    // =====================================
+    // ───────────────────────────────
+    // FETCH SERVER DOCS
+    // ───────────────────────────────
 
-    const fileName =
+// ───────────────────────────────
+// CHECK LOCAL DATABASE
+// ───────────────────────────────
+
+const localCount =
+  await this.offlineVault
+    .documents
+    .count();
+
+console.log(
+  '📦 LOCAL DOC COUNT:',
+  localCount
+);
+
+let response;
+
+// ───────────────────────────────
+// FIRST INSTALL
+// ───────────────────────────────
+
+if (localCount === 0) {
+
+  console.log(
+    '🌐 FULL FIRST SYNC'
+  );
+
+  response =
+    await this.supabaseService
+      .getDocuments();
+}
+
+// ───────────────────────────────
+// INCREMENTAL SYNC
+// ───────────────────────────────
+
+else {
+
+  console.log(
+    '⚡ INCREMENTAL SYNC'
+  );
+
+  const lastSync =
+    localStorage.getItem(
+      'last_sync_time'
+    );
+
+  response =
+    await this.supabaseService
+      .getDocuments(
+        lastSync || undefined
+      );
+}
+
+const {
+  data,
+  error
+} = response;
+
+    if (error) {
+
+      throw error;
+    }
+
+    if (!data) {
+
+      throw new Error(
+        'No documents found'
+      );
+    }
+
+    const total =
+      data.length;
+
+    let processed = 0;
+// ───────────────────────────────
+// LOAD LOCAL DOCS ONCE
+// ───────────────────────────────
+
+const localDocs =
+  await this.offlineVault
+    .documents
+    .toArray();
+
+// ───────────────────────────────
+// CREATE FAST LOOKUP MAP
+// ───────────────────────────────
+
+const localMap =
+  new Map(
+
+    localDocs.map(doc => [
+
+      doc.server_id,
+
+      doc
+    ])
+  );
+    // ───────────────────────────────
+    // PROCESS EACH DOC
+    // ───────────────────────────────
+
+    for (const serverDoc of data) {
+
+      try {
+
+        const fileName = 
+          serverDoc.file_url
+            ?.split('/')
+            ?.pop();
+
+        if (!fileName) {
+          continue;
+        }
+
+        // ───────────────────────────
+        // CHECK LOCAL CACHE
+        // ───────────────────────────
+
+        const exists =
+          await this.offlineVault
+            .fileExists(
+              fileName
+            );
+
+        // ───────────────────────────
+        // FIND EXISTING DEXIE DOC
+        // ───────────────────────────
+
+const existing =
+  localMap.get(
+    serverDoc.id
+  );
+
+        // ───────────────────────────
+        // NORMALIZED DOCUMENT
+        // ───────────────────────────
+
+        const normalizedDoc = {
+
+          // 🔥 NEVER TOUCH Dexie id
+
+          server_id:
+            serverDoc.id,
+
+          file_url:
+            serverDoc.file_url,
+
+          created_at:
+            serverDoc.created_at,
+
+          file_type:
+            serverDoc.file_type,
+
+          members:
+            serverDoc.members,
+
+          categories:
+            serverDoc.categories,
+
+          types:
+            serverDoc.types,
+
+          original_name:
+            fileName
+              .split('_')
+              .slice(1)
+              .join('_')
+              .replace('.enc', ''),
+
+          local_path:
+            exists
+              ? `vault/${fileName}`
+              : null,
+
+          thumbnail_path:
+            `thumbnails/${fileName}.thumb`,
+
+          synced: true,
+
+          local_only: false,
+
+          sync_pending: false,
+
+          sync_failed: false
+        };
+
+        // ───────────────────────────
+        // RESTORE THUMBNAIL
+        // ───────────────────────────
+
+        if (exists) {
+
+          await this.attachThumbnail(
+            normalizedDoc,
+            fileName
+          );
+        }
+
+        // ───────────────────────────
+        // INSERT
+        // ───────────────────────────
+console.log(
+  '━━━━━━━━━━━━━━'
+);
+
+console.log(
+  'SERVER DOC ID:',
+  serverDoc.id
+);
+
+console.log(
+  'FOUND EXISTING:',
+  existing
+);
+
+const allDocs =
+  await this.offlineVault
+    .documents
+    .toArray();
+
+console.log(
+  'ALL LOCAL DOCS:',
+  allDocs
+);
+
+console.log(
+  '━━━━━━━━━━━━━━'
+);
+        if (!existing) {
+
+          await this.offlineVault
+            .saveLocalDocument(
+              normalizedDoc
+            );
+        }
+
+        // ───────────────────────────
+        // UPDATE
+        // ───────────────────────────
+
+        else {
+
+          await this.offlineVault
+            .documents
+            .update(
+              existing.id,
+              normalizedDoc
+            );
+        }
+
+        processed++;
+
+        this.syncStatus.setSyncing(
+
+          true,
+
+          `Syncing ${processed}/${total}`
+        );
+
+      } catch (docErr) {
+
+        console.error(
+          '❌ Document sync failed',
+          docErr
+        );
+      }
+    }
+
+    // ───────────────────────────────
+    // RELOAD LOCAL DOCS
+    // ───────────────────────────────
+
+    await this.loadOfflineDocuments();
+
+    console.log(
+      '✅ Metadata sync completed'
+    );
+
+  } catch (e) {
+
+    console.error(
+      '❌ Sync failed',
+      e
+    );
+
+  } finally {
+
+    this.isSyncRunning = false;
+
+    this.syncStatus
+      .setSyncing(false);
+
+    this.syncStatus
+      .setLastSyncNow();
+
+localStorage.setItem(
+  'last_sync_time',
+  new Date().toISOString()
+);
+  }
+}
+
+  // ── Offline load ───────────────────────────────────────────────────────────
+
+  async loadOfflineDocuments() {
+    console.log('📦 Loading local docs');
+
+    // getDocuments() already orders by created_at DESC
+    const offlineDocs = await this.offlineVault.getDocuments();
+
+    this.documents    = [...offlineDocs];
+    this.allDocuments = [...offlineDocs];
+    this.isLoading    = false;
+
+    // Load thumbnails progressively in the background; each one refreshes the list
+    // for (const doc of offlineDocs) {
+    //   try {
+    //     const fileName = doc.file_url?.split('/')?.pop();
+    //     if (!fileName) continue;
+    //     await this.attachThumbnail(doc, fileName);
+    //     this.documents = [...this.documents]; // trigger change detection
+    //   } catch (e) {
+    //     console.error('❌ Thumbnail load failed', e);
+    //   }
+    // }
+    // ─────────────────────────────────────
+// LOAD THUMBNAILS IN PARALLEL
+// ─────────────────────────────────────
+
+// ─────────────────────────────────────
+// LOAD THUMBNAILS IN PARALLEL
+// ─────────────────────────────────────
+
+const docsWithoutPreview =
+
+  offlineDocs.filter(
+    doc => !doc.preview
+  );
+
+await Promise.all(
+
+  offlineDocs.map(
+    async (doc) => {
+
+      try {
+
+        const fileName =
+          doc.file_url
+            ?.split('/')
+            ?.pop();
+
+        if (!fileName) {
+          return;
+        }
+
+        await this.attachThumbnail(
+          doc,
+          fileName
+        );
+
+      } catch (e) {
+
+        console.error(
+          '❌ Thumbnail load failed',
+          e
+        );
+      }
+    }
+  )
+);
+
+console.log(
+  '✅ THUMB LOOP COMPLETED'
+);
+
+this.documents =
+  [...offlineDocs];
+
+this.allDocuments =
+  [...offlineDocs];
+
+// 🔥 refresh UI once
+// this.documents = [
+//   ...this.documents
+// ];
+this.cdr.detectChanges();
+  }
+
+  // ── Private helpers ────────────────────────────────────────────────────────
+
+  /**
+   * Reads the cached thumbnail for a doc and sets doc.preview.
+   * offlineVault.readThumbnail prepends 'thumbnails/' internally,
+   * so we pass only the bare filename + '.thumb'.
+   */
+private async attachThumbnail(
+  doc: any,
+  fileName: string
+): Promise<void> {
+
+  console.log('━━━━━━━━━━━━━━━━━━');
+
+  console.log(
+    '🖼 ATTACH THUMB START'
+  );
+
+  console.log(
+    '📄 FILE NAME:',
+    fileName
+  );
+
+  console.log(
+    '📄 FILE URL:',
+    doc.file_url
+  );
+
+  console.log(
+    '📄 LOCAL PATH:',
+    doc.local_path
+  );
+
+  console.log(
+    '📄 THUMB PATH:',
+    doc.thumbnail_path
+  );
+
+  // ─────────────────────────────
+  // ALREADY LOADED
+  // ─────────────────────────────
+
+  if (doc.preview) {
+
+    console.log(
+      '⚡ PREVIEW ALREADY EXISTS'
+    );
+
+    console.log(
+      'PREVIEW TYPE:',
+      typeof doc.preview
+    );
+
+    console.log(
+      'PREVIEW VALUE:',
+      doc.preview
+    );
+
+    return;
+  }
+
+  // ─────────────────────────────
+  // READ THUMB
+  // ─────────────────────────────
+
+  const thumb =
+    await this.offlineVault
+      .readThumbnail(
+        fileName + '.thumb'
+      );
+
+  console.log(
+    '🖼 THUMB EXISTS?',
+    !!thumb
+  );
+
+if (!thumb) {
+
+  console.log(
+    '⚠️ THUMB NOT FOUND'
+  );
+
+  console.log(
+    '☁️ DOWNLOADING FILE FOR THUMB'
+  );
+
+  const ready =
+    await this.ensureLocalFile(doc);
+
+  console.log(
+    '📦 FILE READY?',
+    ready
+  );
+
+  if (!ready) {
+
+    console.log(
+      '❌ FILE DOWNLOAD FAILED'
+    );
+
+    return;
+  }
+
+  console.log(
+    '🔁 RETRYING THUMB LOAD'
+  );
+
+  const regeneratedThumb =
+    await this.offlineVault
+      .readThumbnail(
+        fileName + '.thumb'
+      );
+
+  console.log(
+    '🖼 REGENERATED THUMB EXISTS?',
+    !!regeneratedThumb
+  );
+
+  if (!regeneratedThumb) {
+
+    console.log(
+      '❌ THUMB REGEN FAILED'
+    );
+
+    return;
+  }
+
+  const finalMime =
+    doc.file_type ||
+    'image/jpeg';
+
+  doc.preview =
+    `data:${finalMime};base64,${regeneratedThumb}`;
+
+  console.log(
+    '✅ REGENERATED PREVIEW ASSIGNED'
+  );
+
+  return;
+}
+
+  console.log(
+    '🖼 THUMB LENGTH:',
+    thumb.length
+  );
+
+  // ─────────────────────────────
+  // MIME TYPE
+  // ─────────────────────────────
+
+  const finalMime =
+    doc.file_type ||
+    'image/jpeg';
+
+  console.log(
+    '📄 MIME TYPE:',
+    finalMime
+  );
+
+  // ─────────────────────────────
+  // ASSIGN STRING ONLY
+  // ─────────────────────────────
+
+  const previewString =
+    `data:${finalMime};base64,${thumb}`;
+
+  console.log(
+    '📄 PREVIEW STRING TYPE:',
+    typeof previewString
+  );
+
+  console.log(
+    '📄 PREVIEW SAMPLE:',
+    previewString.substring(0, 80)
+  );
+
+  // 🔥 IMPORTANT
+  // ALWAYS STRING
+  doc.preview =
+    String(previewString);
+
+  console.log(
+    '✅ PREVIEW ASSIGNED'
+  );
+
+  console.log(
+    '📄 FINAL PREVIEW TYPE:',
+    typeof doc.preview
+  );
+
+  console.log(
+    '📄 FINAL PREVIEW VALUE:',
+    doc.preview
+  );
+
+  console.log('━━━━━━━━━━━━━━━━━━');
+}
+
+  /**
+   * Generates a thumbnail from a decrypted blob URL and persists it.
+   * Handles both images and PDFs.
+   */
+  private async generateAndCacheThumbnail(
+    doc: any,
+    fileName: string,
+    blobUrl: string,
+  ): Promise<void> {
+    try {
+      let base64: string;
+
+const isPdfFile =
+
+  doc.file_type === 'application/pdf'
+
+  ||
+
+  fileName
+    .toLowerCase()
+    .includes('.pdf');
+console.log(
+  '📄 PDF CHECK:',
+  {
+    fileName,
+    fileType: doc.file_type,
+    isPdfFile
+  }
+);
+      if (isPdfFile) {
+        const dataUrl = await this.generatePdfThumbnail(blobUrl);
+        base64        = dataUrl.split(',')[1];
+        doc.preview   = dataUrl;
+      } else {
+        const response = await fetch(blobUrl);
+        const blob     = await response.blob();
+        base64         = await this.blobToBase64(blob);
+        doc.preview    = `data:image/jpeg;base64,${base64}`;
+      }
+
+      await this.offlineVault.saveThumbnail(fileName + '.thumb', base64);
+    } catch (e) {
+      console.error('❌ Thumbnail cache error', e);
+    }
+  }
+
+  /** Converts a Blob to raw base64 (no data-url prefix). */
+  private blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader     = new FileReader();
+      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror   = () => reject(new Error('FileReader failed'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  /**
+   * Builds the Dexie metadata object for a server-side document.
+   * Strips the userId/timestamp prefix and .enc suffix to get the original filename.
+   */
+  private buildOfflineMeta(doc: any, fileName: string, localPath: string | null): any {
+    // Server filename: timestamp_originalName.enc  (after userId/ is stripped by split('/').pop())
+    const originalName = fileName.split('_').slice(1).join('_').replace('.enc', '');
+    return {
+      ...doc,
+      original_name:  originalName,
+      local_path:     localPath,
+      thumbnail_path: `thumbnails/${fileName}.thumb`,
+      synced:         true,
+      local_only:     false,
+      sync_pending:   false,
+      sync_failed:    false,
+    };
+  }
+
+  /** Revokes all blob URLs created during sync. */
+  private revokeSyncBlobUrls(): void {
+    for (const url of this.syncBlobUrls) {
+      try { URL.revokeObjectURL(url); } catch {}
+    }
+    this.syncBlobUrls = [];
+  }
+
+  // ── PDF thumbnail ──────────────────────────────────────────────────────────
+
+  async generatePdfThumbnail(url: string): Promise<string> {
+    const pdf      = await pdfjsLib.getDocument(url).promise;
+    const page     = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1 });
+    const canvas   = document.createElement('canvas');
+    const context  = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas context unavailable');
+
+    canvas.width  = viewport.width;
+    canvas.height = viewport.height;
+    await (page as any).render({ canvasContext: context, viewport, canvas }).promise;
+    return canvas.toDataURL();
+  }
+
+  // ── Action sheet ───────────────────────────────────────────────────────────
+
+  async openMenu(doc: DocumentItem) {
+    const sheet = await this.actionSheetCtrl.create({
+      header:   'Options',
+      cssClass: 'vault-action-sheet',
+      buttons: [
+        { text: 'View',     icon: 'eye-outline',          handler: () => this.viewDoc(doc) },
+        { text: 'Download', icon: 'download-outline',     handler: () => this.downloadDoc(doc) },
+        { text: 'Share',    icon: 'share-social-outline', handler: () => this.shareDoc(doc) },
+        { text: 'Delete',   icon: 'trash-outline', role: 'destructive', handler: () => this.confirmDelete(doc) },
+        { text: 'Cancel',   icon: 'close-outline', role: 'cancel' },
+      ],
+    });
+    await sheet.present();
+  }
+
+  // ── View ───────────────────────────────────────────────────────────────────
+
+async viewDoc(
+  doc: DocumentItem
+) {
+
+  try {
+
+    // ───────────────────────────────
+    // ENSURE LOCAL CACHE
+    // ───────────────────────────────
+
+    const ready =
+      await this.ensureLocalFile(
+        doc
+      );
+
+    if (!ready) {
+
+      await this.showToast(
+        'Unable to load file',
+        'danger'
+      );
+
+      return;
+    }
+
+    const key =
+      this.vaultService
+        .currentKey;
+
+    const fileName =   doc.local_file_name ||
       doc.file_url
         .split('/')
         .pop();
 
     if (!fileName) {
 
-      alert(
-        'Invalid file'
-      );
-
       return;
     }
 
-    // 📦 local encrypted cache
     const encryptedText =
       await this.offlineVault
         .readEncryptedFile(
@@ -1491,20 +1382,13 @@ async viewDoc(doc: any) {
 
     if (!encryptedText) {
 
-      alert(
-        'Offline file missing'
+      await this.showToast(
+        'File missing',
+        'danger'
       );
 
       return;
     }
-
-    console.log(
-      '✅ Loaded from local cache'
-    );
-
-    // =====================================
-    // DECRYPT
-    // =====================================
 
     const decrypted =
       decryptData(
@@ -1517,50 +1401,103 @@ async viewDoc(doc: any) {
         decrypted
       ).buffer;
 
-    // =====================================
-    // CREATE BLOB
-    // =====================================
+const isPdf =
+  doc.file_type ===
+  'application/pdf';
+console.log(
+  '📄 FILE TYPE:',
+  doc.file_type
+);
+
+console.log(
+  '📄 IS PDF:',
+  isPdf
+);
+    const mimeType =
+      doc.file_type ||
+      (
+        isPdf
+          ? 'application/pdf'
+          : 'application/octet-stream'
+      );
 
     const blob =
       new Blob(
         [safeBuffer],
         {
-          type:
-            doc.file_url
-              .toLowerCase()
-              .includes('.pdf')
-
-              ? 'application/pdf'
-
-              : 'image/jpeg'
+          type: mimeType
         }
       );
+console.log(
+  '📄 BLOB SIZE:',
+  blob.size
+);
 
+console.log(
+  '📄 MIME TYPE:',
+  mimeType
+);
     const url =
       URL.createObjectURL(
         blob
       );
-
-    // =====================================
-    // PREVIEW
-    // =====================================
-
+console.log(
+  '📄 OBJECT URL:',
+  url
+);
     this.selectedDocUrl =
       url;
 
     this.isPdf =
-      doc.file_url
-        .toLowerCase()
-        .includes('.pdf');
+      isPdf;
 
-    if (this.isPdf) {
+if (isPdf) {
 
-      this.safeUrl =
-        this.sanitizer
-          .bypassSecurityTrustResourceUrl(
-            url
-          );
-    }
+  console.log(
+    '📄 OPENING PDF NATIVELY'
+  );
+
+  const base64 =
+    this.arrayBufferToBase64(
+      safeBuffer
+    );
+
+  const tempFile =
+    `preview_${Date.now()}.pdf`;
+
+  await Filesystem.writeFile({
+
+    path: tempFile,
+
+    data: base64,
+
+    directory:
+      Directory.Cache
+  });
+
+  const uri =
+    await Filesystem.getUri({
+
+      path: tempFile,
+
+      directory:
+        Directory.Cache
+    });
+
+  console.log(
+    '📄 PDF URI:',
+    uri.uri
+  );
+
+  await Share.share({
+
+    title: 'Open PDF',
+
+    url: uri.uri
+  });
+
+  return;
+}
 
     this.isPreviewOpen =
       true;
@@ -1568,32 +1505,92 @@ async viewDoc(doc: any) {
   } catch (e) {
 
     console.error(
-      '❌ VIEW ERROR',
+      '❌ View error',
       e
     );
 
-    alert(
-      'Unable to open file'
+    await this.showToast(
+      'Unable to open file',
+      'danger'
     );
   }
+}
+onPdfLoad() {
+
+  console.log(
+    '✅ PDF iframe loaded'
+  );
+}
+
+private arrayBufferToBase64(
+  buffer: ArrayBuffer
+): string {
+
+  let binary = '';
+
+  const bytes =
+    new Uint8Array(buffer);
+
+  const len =
+    bytes.byteLength;
+
+  for (let i = 0; i < len; i++) {
+
+    binary +=
+      String.fromCharCode(
+        bytes[i]
+      );
+  }
+
+  return btoa(binary);
+}
+
+onPdfError() {
+
+  console.log(
+    '❌ PDF iframe failed'
+  );
 }
   closePreview() {
     this.isPreviewOpen = false;
     if (this.selectedDocUrl) {
-  URL.revokeObjectURL(this.selectedDocUrl);
-}
+      URL.revokeObjectURL(this.selectedDocUrl);
+      this.selectedDocUrl = '';
+    }
   }
 
-  // ✅ DOWNLOAD
-// ✅ DOWNLOAD
+  // ── Download ───────────────────────────────────────────────────────────────
 
-async downloadDoc(doc: any) {
+// ── Download ───────────────────────────────────────────────────────────────
 
-  console.log(
-    '📥 DOWNLOAD START'
-  );
+async downloadDoc(
+  doc: DocumentItem
+) {
 
   try {
+
+    // ───────────────────────────────
+    // ENSURE LOCAL CACHE
+    // ───────────────────────────────
+
+    const ready =
+      await this.ensureLocalFile(
+        doc
+      );
+
+    if (!ready) {
+
+      await this.showToast(
+        'Unable to load file',
+        'danger'
+      );
+
+      return;
+    }
+
+    // ───────────────────────────────
+    // GET DECRYPTED BLOB
+    // ───────────────────────────────
 
     const blob =
       await this.getDecryptedBlob(
@@ -1604,34 +1601,64 @@ async downloadDoc(doc: any) {
       return;
     }
 
-    const fileName =
-      doc.file_url
-        .split('/')
-        .pop()
-        ?.replace('.enc', '')
-      || 'file';
+    // ───────────────────────────────
+    // FILE NAME
+    // ───────────────────────────────
 
-    // 🔽 browser download
-    const url =
-      URL.createObjectURL(
-        blob
-      );
+const fileName =
+  doc.original_name
+  || 'file';
 
-    const a =
-      document.createElement('a');
+    // ───────────────────────────────
+    // DOWNLOAD
+    // ───────────────────────────────
 
-    a.href =
-      url;
+const isMobile =
+  Capacitor.isNativePlatform();
 
-    a.download =
-      fileName;
+if (!isMobile) {
 
-    a.click();
+  // 🌐 Browser
 
-    URL.revokeObjectURL(
-      url
+  const url =
+    URL.createObjectURL(blob);
+
+  const a =
+    document.createElement('a');
+
+  a.href =
+    url;
+
+  a.download =
+    fileName;
+
+  a.click();
+
+  URL.revokeObjectURL(url);
+
+} else {
+
+  // 📱 Mobile
+
+  const base64 =
+    await this.blobToBase64String(
+      blob
     );
 
+  await Filesystem.writeFile({
+
+    path: fileName,
+
+    data: base64,
+
+    directory:
+      Directory.Documents
+  });
+
+  await this.showToast(
+    'File saved to Documents'
+  );
+}
     console.log(
       '✅ DOWNLOAD SUCCESS'
     );
@@ -1639,21 +1666,44 @@ async downloadDoc(doc: any) {
   } catch (e) {
 
     console.error(
-      '❌ DOWNLOAD ERROR',
+      '❌ Download error',
       e
+    );
+
+    await this.showToast(
+      'Download failed',
+      'danger'
     );
   }
 }
-  // ✅ SHARE
-// ✅ SHARE
+  // ── Share ──────────────────────────────────────────────────────────────────
 
-async shareDoc(doc: any) {
+// ── Share ──────────────────────────────────────────────────────────────────
 
-  console.log(
-    '📤 SHARE START'
-  );
+async shareDoc(
+  doc: DocumentItem
+) {
 
   try {
+
+    // ───────────────────────────────
+    // ENSURE LOCAL CACHE
+    // ───────────────────────────────
+
+    const ready =
+      await this.ensureLocalFile(
+        doc
+      );
+
+    if (!ready) {
+
+      await this.showToast(
+        'Unable to load file',
+        'danger'
+      );
+
+      return;
+    }
 
     const blob =
       await this.getDecryptedBlob(
@@ -1664,736 +1714,662 @@ async shareDoc(doc: any) {
       return;
     }
 
-    const fileName =
-      doc.file_url
-        .split('/')
-        .pop()
-        ?.replace('.enc', '')
-      || 'file';
+const fileName =
+  doc.original_name
+  || 'file';
 
-    const file =
-      new File(
-        [blob],
-        fileName,
-        {
-          type: blob.type
-        }
-      );
+const isMobile =
+  Capacitor.isNativePlatform();
 
-    // 🌐 WEB SHARE
-    if (
-      navigator.canShare &&
-      navigator.canShare({
-        files: [file]
-      })
-    ) {
+if (!isMobile) {
 
-      await navigator.share({
+  // 🌐 Browser
 
-        files: [file],
+  const file =
+    new File(
+      [blob],
+      fileName,
+      {
+        type: blob.type
+      }
+    );
 
-        title: fileName
-      });
+  if (
+    navigator.canShare?.({
+      files: [file]
+    })
+  ) {
 
-      console.log(
-        '✅ SHARE SUCCESS'
-      );
-    }
+    await navigator.share({
+
+      files: [file],
+
+      title: fileName
+    });
+  }
+
+} else {
+
+  // 📱 Mobile
+
+  const base64 =
+    await this.blobToBase64String(
+      blob
+    );
+
+  await Filesystem.writeFile({
+
+    path: fileName,
+
+    data: base64,
+
+    directory:
+      Directory.Cache
+  });
+
+  const uri =
+    await Filesystem.getUri({
+
+      path: fileName,
+
+      directory:
+        Directory.Cache
+    });
+
+  await Share.share({
+
+    title: fileName,
+
+    url: uri.uri
+  });
+}
 
   } catch (e) {
 
-    console.error(
-      '❌ SHARE ERROR',
+    console.log(
+      'Share dismissed',
       e
     );
   }
 }
-selectMember(member: string) {
-  this.selectedMember = member;
-  this.applyFilters();
+
+
+private async blobToBase64String(
+  blob: Blob
+): Promise<string> {
+
+  return new Promise(
+    (resolve, reject) => {
+
+      const reader =
+        new FileReader();
+
+      reader.onloadend =
+        () => {
+
+          const base64 =
+            (
+              reader.result as string
+            ).split(',')[1];
+
+          resolve(base64);
+        };
+
+      reader.onerror =
+        reject;
+
+      reader.readAsDataURL(
+        blob
+      );
+    }
+  );
 }
+  // ── Filters ────────────────────────────────────────────────────────────────
 
-selectCategory(category: string) {
-  this.selectedCategory = category;
-
-  if (category) {
-    this.types = this.allTypes.filter(
-      t => t.category_name === category
-    );
-  } else {
-    this.types = this.allTypes;
-  }
-
-  this.applyFilters();
-}
-selectType(type: string) {
-  this.selectedType = type;
-  this.applyFilters();
-}
-onSearchChange() {
-  const search = this.searchText?.toLowerCase() || '';
-
-  if (!search) {
-    this.suggestions = [];
+  selectMember(member: string) {
+    this.selectedMember = member;
     this.applyFilters();
-    return;
   }
 
-  this.suggestions = this.allDocuments
-    .map(doc => doc.types?.name)
-    .filter(name => name?.toLowerCase().includes(search));
-
-  this.applyFilters();
-}
-applyFilters() {
-  let filtered = this.allDocuments.filter(doc => {
-
-    const matchMember =
-      !this.selectedMember ||
-      doc.members?.name === this.selectedMember;
-
-    const matchCategory =
-      !this.selectedCategory ||
-      doc.categories?.name === this.selectedCategory;
-
-    const matchType =
-      !this.selectedType ||
-      doc.types?.name === this.selectedType;
-
-const matchSearch =
-  !this.searchText ||
-  doc.types?.name?.toLowerCase().includes(this.searchText.toLowerCase());
-
-    return matchMember && matchCategory && matchType && matchSearch;
-  });
-
-  // 🔥 SORT
-  filtered.sort((a, b) => {
-    const d1 = new Date(a.created_at).getTime();
-    const d2 = new Date(b.created_at).getTime();
-
-    return this.sortOrder === 'latest' ? d2 - d1 : d1 - d2;
-  });
-
-  this.documents = filtered;
-}
-setSort(order: string) {
-  this.sortOrder = order;
-  this.applyFilters();
-}
-selectSuggestion(value: string) {
-  this.searchText = value;   // updates input
-  this.suggestions = [];
-  this.applyFilters();
-    // optional: remove keyboard focus
-  (document.activeElement as HTMLElement)?.blur();
-  this.applyFilters();
-}
-
-highlight(text: string | undefined): SafeHtml {
-  if (!text) return '';
-
-  const search = this.searchText?.trim();
-
-  if (!search) return text;
-
-  const regex = new RegExp(`(${search})`, 'gi');
-
-  const replaced = text.replace(
-    regex,
-    `<span class="highlight">$1</span>`
-  );
-
-  return this.sanitizer.bypassSecurityTrustHtml(replaced);
-}
-isPdfFile(url: string): boolean {
-  return url?.toLowerCase().includes('.pdf');
-}
-goBack() {
-  this.location.back();
-}
-async confirmDelete(doc: any) {
-  const alert = await this.alertCtrl.create({
-    header: 'Delete Document',
-    message: 'Are you sure you want to delete this file?',
-    buttons: [
-      {
-        text: 'Cancel',
-        role: 'cancel'
-      },
-      {
-        text: 'Delete',
-        role: 'destructive',
-        handler: () => this.deleteDocument(doc)
-      }
-    ]
-  });
-
-  await alert.present();
-}
-
-async deleteDocument(doc: any) {
-
-  // 🔥 remove from UI instantly
-  this.allDocuments = this.allDocuments.filter(d => d.id !== doc.id);
-  this.documents = [...this.allDocuments];
-
-  // store temporarily
-  this.pendingDelete = doc;
-
-  // show undo toast
-  this.showUndoToast();
-
-  // delay actual delete
-  this.deleteTimeout = setTimeout(async () => {
-    await this.finalDelete(doc);
-    this.pendingDelete = null;
-  }, 4000); // 4 sec undo window
-}
-
-async finalDelete(doc: any) {
-  try {
-    let path = doc.file_url;
-
-    if (path.includes('http')) {
-      path = path.split('/documents/')[1];
-    }
-
-    await this.supabaseService.deleteFile(path);
-    await this.supabaseService.deleteRecord(doc.id);
-    this.showToast();
-  } catch (err) {
-    console.error('Final delete error', err);
+  selectCategory(category: string) {
+    this.selectedCategory = category;
+    this.types = category
+      ? this.allTypes.filter(t => t.category_name === category)
+      : [...this.allTypes];
+    this.applyFilters();
   }
-}
-async showToast() {
-  const toast = await this.toastCtrl.create({
-    message: 'Document deleted',
-    duration: 2000
-  });
-  toast.present();
-}
 
-undoDelete() {
-  if (!this.pendingDelete) return;
+  selectType(type: string) {
+    this.selectedType = type;
+    this.applyFilters();
+  }
 
-  clearTimeout(this.deleteTimeout);
+  onSearchChange() {
+    const search = this.searchText?.toLowerCase() || '';
 
-  const restoredDoc = {
-    ...this.pendingDelete,
-    isRestoring: true
-  };
+    this.suggestions = search
+      ? [...new Set(
+          this.allDocuments
+            .map(d => d.types?.name as string | undefined)
+            .filter((name): name is string => !!name?.toLowerCase().includes(search))
+        )]
+      : [];
 
-  // add back to UI
-  this.allDocuments.unshift(restoredDoc);
-  this.documents = [...this.allDocuments];
+    this.applyFilters();
+  }
 
-  // remove animation flag after animation
-  setTimeout(() => {
-    restoredDoc.isRestoring = false;
-  }, 400);
+  applyFilters() {
+    let filtered = this.allDocuments.filter(doc => {
+      const matchMember   = !this.selectedMember   || doc.members?.name    === this.selectedMember;
+      const matchCategory = !this.selectedCategory || doc.categories?.name === this.selectedCategory;
+      const matchType     = !this.selectedType     || doc.types?.name      === this.selectedType;
+      const matchSearch   = !this.searchText
+        || doc.types?.name?.toLowerCase().includes(this.searchText.toLowerCase());
 
-  this.pendingDelete = null;
-}
+      return matchMember && matchCategory && matchType && matchSearch;
+    });
 
-async showUndoToast() {
-  const toast = await this.toastCtrl.create({
-    message: 'Document deleted',
-    duration: 4000,
-    buttons: [
-      {
-        text: 'Undo',
-        handler: () => this.undoDelete()
-      }
-    ]
-  });
+    filtered.sort((a, b) => {
+      const d1 = new Date(a.created_at).getTime();
+      const d2 = new Date(b.created_at).getTime();
+      return this.sortOrder === 'latest' ? d2 - d1 : d1 - d2;
+    });
 
-  await toast.present();
-}
+    this.documents = filtered;
+  }
 
-async cacheDocumentsLocally(
-  docs: any[]
-) {
+  setSort(order: string) {
+    this.sortOrder = order;
+    this.applyFilters();
+  }
 
-  const cachedDocs = [];
+  selectSuggestion(value: string) {
+    this.searchText  = value;
+    this.suggestions = [];
+    (document.activeElement as HTMLElement)?.blur();
+    this.applyFilters(); // called exactly once
+  }
 
-  for (const doc of docs) {
+  highlight(text: string | undefined): SafeHtml {
+    if (!text) return '';
+    const search = this.searchText?.trim();
+    if (!search) return text;
 
+    const regex    = new RegExp(`(${search})`, 'gi');
+    const replaced = text.replace(regex, `<span class="highlight">$1</span>`);
+    return this.sanitizer.bypassSecurityTrustHtml(replaced);
+  }
+
+  // ── Utilities ──────────────────────────────────────────────────────────────
+
+  isPdfFile(url: string): boolean {
+    return url?.toLowerCase().includes('.pdf');
+  }
+
+  goBack() {
+    this.location.back();
+  }
+
+  /** Single toast helper replaces all raw alert() calls throughout the class. */
+  async showToast(message: string, color: 'success' | 'warning' | 'danger' = 'success') {
+    const toast = await this.toastCtrl.create({ message, duration: 2500, color });
+    await toast.present();
+  }
+
+  // ── Delete / Undo ──────────────────────────────────────────────────────────
+
+  async confirmDelete(doc: DocumentItem) {
+    const alert = await this.alertCtrl.create({
+      header:  'Delete Document',
+      message: 'Are you sure you want to delete this file?',
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        { text: 'Delete', role: 'destructive', handler: () => this.deleteDocument(doc) },
+      ],
+    });
+    await alert.present();
+  }
+
+  async deleteDocument(doc: DocumentItem) {
+    // Remove from UI immediately for instant feedback
+    this.allDocuments  = this.allDocuments.filter(d => d.id !== doc.id);
+    this.documents     = [...this.allDocuments];
+    this.pendingDelete = doc;
+
+    await this.showUndoToast();
+
+    this.deleteTimeout = setTimeout(async () => {
+      await this.finalDelete(doc);
+      this.pendingDelete = null;
+    }, 4000);
+  }
+
+  async finalDelete(doc: DocumentItem) {
     try {
+      // Always remove from Dexie first (works offline too)
+      await this.offlineVault.documents.delete(doc.id);
 
-      console.log(
-        '📥 Caching',
-        doc.file_url
-      );
-
-      // 🔗 signed url
-      const signedUrl =
-        await this.supabaseService
-          .getSignedUrl(
-            doc.file_url
-          );
-
-      if (!signedUrl) {
-        continue;
+      // Only call Supabase if the doc was synced to the server and we are online
+      if (!doc.local_only && navigator.onLine) {
+let path =
+  doc.file_url;
+          if (path.includes('http')) {
+          path = path.split('/documents/')[1];
+        }
+        await this.supabaseService.deleteFile(path);
+        // Use server_id if available, otherwise fall back to the server-assigned id on the doc
+        const serverId = doc.server_id || (doc as any).id;
+        if (serverId) {
+          await this.supabaseService.deleteRecord(serverId);
+        }
       }
 
-      // 📦 download encrypted
-      const res =
-        await fetch(signedUrl);
+      await this.showToast('Document deleted');
+    } catch (err) {
+      console.error('❌ Final delete error', err);
+      await this.showToast('Delete failed — please try again', 'danger');
+    }
+  }
 
-      const encryptedText =
-        await res.text();
+  undoDelete() {
+    if (!this.pendingDelete) return;
 
-      // 📄 filename
-      const fileName =
-        doc.file_url
-          .split('/')
-          .pop();
+    clearTimeout(this.deleteTimeout);
 
-      // 💾 save local file
-      const localPath =
-        await this.offlineVault
-          .saveEncryptedFile(
-            fileName,
-            encryptedText
-          );
+    const restored = { ...this.pendingDelete, isRestoring: true };
+    this.allDocuments.unshift(restored);
+    this.documents = [...this.allDocuments];
 
-      // 📦 store metadata
-      cachedDocs.push({
+    setTimeout(() => { restored.isRestoring = false; }, 400);
+    this.pendingDelete = null;
+  }
 
-        ...doc,
+  async showUndoToast() {
+    const toast = await this.toastCtrl.create({
+      message:  'Document deleted',
+      duration: 4000,
+      buttons:  [{ text: 'Undo', handler: () => this.undoDelete() }],
+    });
+    await toast.present();
+  }
 
-        local_path:
-          localPath,
+  // ── Decrypted blob ─────────────────────────────────────────────────────────
 
-        synced: true
+  async getDecryptedBlob(doc: DocumentItem): Promise<Blob | null> {
+    try {
+      const key      = this.vaultService.currentKey;
+      const fileName = doc.local_file_name || doc.file_url.split('/').pop();
+      if (!fileName) return null;
+
+      // offlineVault.readEncryptedFile prepends 'vault/' — pass the bare filename
+      const encryptedText = await this.offlineVault.readEncryptedFile(fileName);
+      if (!encryptedText) {
+        await this.showToast('File not cached — pull down to refresh', 'warning');
+        return null;
+      }
+
+      const decrypted  = decryptData(encryptedText as string, key);
+      const safeBuffer = new Uint8Array(decrypted).buffer;
+
+      return new Blob([safeBuffer], {
+        type: doc.file_type || 'application/octet-stream',
       });
-
     } catch (e) {
-
-      console.error(
-        '❌ Cache error',
-        e
-      );
-    }
-  }
-
-  // 💾 save metadata in Dexie
-  await this.offlineVault
-    .saveDocuments(
-      cachedDocs
-    );
-
-  console.log(
-    '✅ All docs cached offline'
-  );
-}
-// =====================================
-// GET DECRYPTED BLOB
-// =====================================
-
-async getDecryptedBlob(
-  doc: any
-): Promise<Blob | null> {
-
-  try {
-
-    // 🔐 key
-    const key =
-  this.vaultService
-    .currentKey;
-    // const key =
-    //   await this.vaultService
-    //     .getVaultKey();
-
-    // if (!key) {
-    //   return null;
-    // }
-
-    // 📄 filename
-    const fileName =
-      doc.file_url
-        .split('/')
-        .pop();
-
-    if (!fileName) {
+      console.error('❌ Blob creation failed', e);
       return null;
     }
+  }
 
-    // 📦 local encrypted file
-    const encryptedText =
-      await this.offlineVault
-        .readEncryptedFile(
-          fileName
-        );
+  // ── Sync queue ─────────────────────────────────────────────────────────────
 
-    if (!encryptedText) {
-
-      alert(
-        'Offline file missing'
-      );
-
-      return null;
+  shouldSync(): boolean {
+    if (localStorage.getItem('force_sync') === 'true') {
+      localStorage.removeItem('force_sync');
+      return true;
     }
-
-    // 🔓 decrypt
-    const decrypted =
-      decryptData(
-        encryptedText,
-        key
-      );
-
-    const safeBuffer =
-      new Uint8Array(
-        decrypted
-      ).buffer;
-
-    // 📦 blob
-    return new Blob(
-      [safeBuffer],
-      {
-        type:
-          doc.file_type ||
-          'application/octet-stream'
-      }
-    );
-
-  } catch (e) {
-
-    console.error(
-      '❌ Blob creation failed',
-      e
-    );
-
-    return null;
+    const last = localStorage.getItem('last_sync_time');
+    if (!last) return true;
+    return Date.now() - Number(last) > 5 * 60 * 1000;
   }
-}
-
-shouldSync(): boolean {
-
-  // 🔥 upload triggered sync
-
-  const forceSync =
-    localStorage.getItem(
-      'force_sync'
-    );
-
-  if (forceSync === 'true') {
-
-    localStorage.removeItem(
-      'force_sync'
-    );
-
-    return true;
-  }
-
-  // 🕒 normal timed sync
-
-  const last =
-    localStorage.getItem(
-      'last_sync_time'
-    );
-
-  if (!last) {
-    return true;
-  }
-
-  const diff =
-    Date.now() - Number(last);
-
-  // 5 minutes
-
-  return diff > 5 * 60 * 1000;
-}
-
-// =====================================
-// PROCESS SYNC QUEUE
-// =====================================
 
 async processSyncQueue() {
 
-  console.log(
-    '🔄 processSyncQueue'
-  );
+  // ─────────────────────────────
+  // PREVENT DUPLICATE RUNS
+  // ─────────────────────────────
 
-  // =====================================
-  // INTERNET CHECK
-  // =====================================
-
-  if (!navigator.onLine) {
+  if (this.isQueueProcessing) {
 
     console.log(
-      '📴 Offline - sync skipped'
+      '⏳ Queue already processing'
     );
 
     return;
   }
 
-  // =====================================
-  // GET PENDING JOBS
-  // =====================================
+  this.isQueueProcessing = true;
 
-  const jobs =
-    await this.offlineVault
-      .syncQueue
+  // ─────────────────────────────
+  // OFFLINE
+  // ─────────────────────────────
+try {
+  if (!navigator.onLine) {
+
+    console.log(
+      '📴 Offline — sync queue skipped'
+    );
+
+    this.isQueueProcessing = false;
+
+    return;
+  }
+
+    const jobs = await this.offlineVault.syncQueue
       .where('status')
       .equals('pending')
       .toArray();
 
-  console.log(
-    '📦 Pending jobs',
-    jobs.length
+    console.log(`📦 Pending jobs: ${jobs.length}`);
+
+    for (const job of jobs) {
+      if (job.type !== 'upload') continue;
+
+      try {
+        const doc = await this.offlineVault.documents.get(job.document_id);
+        if (!doc) {
+          console.warn('⚠️ Local doc missing for sync job', job.id);
+          continue;
+        }
+
+        // Upload page saves local docs with file_url = bare filename (e.g. 1234_doc.jpg.enc)
+        // readEncryptedFile adds "vault/" itself, so pass the bare filename
+        const localFileName = doc.local_file_name || doc.file_url.split('/').pop()!;
+        const encryptedText = await this.offlineVault.readEncryptedFile(localFileName);
+
+        if (!encryptedText) {
+          console.error('❌ Encrypted file missing on disk for', localFileName);
+          await this.offlineVault.syncQueue.update(job.id, { status: 'failed' });
+          continue;
+        }
+
+const encryptedFile =
+  new File(
+
+    [encryptedText],
+
+    // ✅ KEEP SAME LOCAL ENCRYPTED FILE NAME
+    localFileName,
+
+    {
+      type: 'text/plain'
+    }
   );
+        const filePath = await this.supabaseService.uploadFile(encryptedFile);
 
-  // =====================================
-  // LOOP JOBS
-  // =====================================
+        const { data, error } = await this.supabaseService.saveRecord({
+          member_id:   doc.member_id,
+          category_id: doc.category_id,
+          type_id:     doc.type_id,
+          file_url:    filePath,
+          file_type:   doc.file_type,
+          created_at:  doc.created_at || new Date().toISOString(),
+        });
 
-  for (const job of jobs) {
+        if (error) {
+          console.error('❌ saveRecord failed', error);
+          await this.offlineVault.syncQueue.update(job.id, { status: 'failed' });
+          continue;
+        }
 
-    try {
+        // Mark local doc as synced
+await this.offlineVault.documents.update(
+  job.document_id,
+  {
 
-      // =====================================
-      // UPLOAD JOB
-      // =====================================
+    // ✅ KEEP EXISTING LOCAL FILE
+    local_path:
+      doc.local_path,
 
-      if (job.type !== 'upload') {
-        continue;
+    local_file_name: doc.local_file_name,
+
+    thumbnail_path:
+      doc.thumbnail_path,
+
+    original_name:
+      doc.original_name,
+
+    // ✅ UPDATE SERVER VALUES
+    server_id:
+      (data as any)?.id ?? null,
+
+    file_url:
+      filePath,
+
+    synced: true,
+
+    sync_pending: false,
+
+    sync_failed: false,
+
+    local_only: false
+  }
+);
+
+        await this.offlineVault.syncQueue.update(job.id, { status: 'completed' });
+
+        // Ensure the next loadDocuments pull gets fresh server data
+        localStorage.setItem('force_sync', 'true');
+
+        console.log('✅ Sync queue job done for', doc.original_name);
+      } catch (e) {
+        console.error('❌ Sync queue job failed for job', job.id, e);
+        await this.offlineVault.syncQueue.update(job.id, { status: 'failed' });
       }
-
-      // =====================================
-      // GET LOCAL DOCUMENT
-      // =====================================
-
-      const doc =
-        await this.offlineVault
-          .documents
-          .get(
-            job.document_id
-          );
-
-      if (!doc) {
-
-        console.warn(
-          '⚠️ Local doc missing'
-        );
-
-        continue;
-      }
-
-      console.log(
-        '☁️ Uploading queued doc',
-        doc.original_name
-      );
-
-      // =====================================
-      // READ ENCRYPTED LOCAL FILE
-      // =====================================
-
-      const encryptedText =
-        await this.offlineVault
-          .readEncryptedFile(
-            doc.file_url
-          );
-
-      if (!encryptedText) {
-
-        console.error(
-          '❌ Local encrypted file missing'
-        );
-
-        continue;
-      }
-
-      // =====================================
-      // CREATE ENCRYPTED FILE
-      // =====================================
-
-      const encryptedFile =
-        new File(
-
-          [encryptedText],
-
-          doc.original_name + '.enc',
-
-          {
-            type: 'text/plain'
-          }
-        );
-
-      // =====================================
-      // UPLOAD TO SUPABASE STORAGE
-      // =====================================
-
-      const filePath =
-        await this.supabaseService
-          .uploadFile(
-            encryptedFile
-          );
-
-      console.log(
-        '✅ File uploaded',
-        filePath
-      );
-
-      // =====================================
-      // SAVE RECORD TO DB
-      // =====================================
-
-      const {
-        data,
-        error
-      } =
-        await this.supabaseService
-          .saveRecord({
-
-            member_id:
-              doc.member_id,
-
-            category_id:
-              doc.category_id,
-
-            type_id:
-              doc.type_id,
-
-            file_url:
-              filePath,
-
-            file_type:
-              doc.file_type,
-
-            created_at:
-              new Date()
-                .toISOString()
-          });
-
-      if (error) {
-
-        console.error(
-          '❌ saveRecord failed',
-          error
-        );
-
-        continue;
-      }
-
-      console.log(
-        '✅ Record saved'
-      );
-
-      // =====================================
-      // UPDATE LOCAL DOC
-      // =====================================
-
-      await this.offlineVault
-        .documents
-        .update(
-
-          job.document_id,
-
-          {
-server_id:
-  (data as any)?.id || null,
-
-            synced: true,
-
-            sync_pending: false,
-
-            sync_failed: false,
-
-            local_only: false
-          }
-        );
-
-      console.log(
-        '✅ Local doc updated'
-      );
-
-      // =====================================
-      // COMPLETE QUEUE JOB
-      // =====================================
-
-      await this.offlineVault
-        .syncQueue
-        .update(
-
-          job.id,
-
-          {
-            status: 'completed'
-          }
-        );
-
-      console.log(
-        '✅ Queue completed'
-      );
-
-    } catch (e) {
-
-      console.error(
-        '❌ Queue upload failed',
-        e
-      );
     }
   }
-
-  // =====================================
-  // REFRESH DOCUMENTS
-  // =====================================
-
-  await this.loadOfflineDocuments();
-
-  console.log(
-    '🎉 Queue sync finished'
-  );
-}
-// =====================================
-// PULL TO REFRESH
-// =====================================
-
-async doRefresh(
-  event: any
-) {
-
-  console.log(
-    '🔄 Pull refresh'
-  );
-
-  try {
-
-    // =====================================
-    // PROCESS PENDING QUEUE
-    // =====================================
-
-    await this.processSyncQueue();
-
-    // =====================================
-    // REFRESH SERVER DOCS
-    // =====================================
-
-    if (navigator.onLine) {
-
-      await this.syncOnlineDocuments();
-
-    } else {
-
-      await this.loadOfflineDocuments();
-    }
-
-  } catch (e) {
+   catch (e) {
 
     console.error(
-      '❌ Refresh failed',
+      '❌ Queue processing failed',
       e
     );
 
   } finally {
 
-    // =====================================
-    // STOP REFRESH UI
-    // =====================================
+    // ✅ ALWAYS RESET
+    this.isQueueProcessing = false;
+  }
+    // await this.loadOfflineDocuments();
+    console.log('🎉 Sync queue processing complete');
+  }
 
-    event.target.complete();
+  // ── Pull to refresh ────────────────────────────────────────────────────────
+
+  async doRefresh(event: any) {
+    try {
+      localStorage.removeItem(
+  'last_sync_time'
+);
+      await this.processSyncQueue();
+
+      if (navigator.onLine) {
+        await this.syncOnlineDocuments();
+      } else {
+        await this.loadOfflineDocuments();
+      }
+    } catch (e) {
+      console.error('❌ Refresh failed', e);
+    } finally {
+      event.target.complete();
+    }
+  }
+
+  // ─────────────────────────────────────
+// ENSURE LOCAL FILE
+// ─────────────────────────────────────
+
+async ensureLocalFile(
+  doc: any
+): Promise<boolean> {
+
+  try {
+
+    const fileName =  doc.local_file_name ||
+      doc.file_url
+        ?.split('/')
+        ?.pop();
+
+    if (!fileName) {
+
+      return false;
+    }
+
+    // ─────────────────────────────────
+    // ALREADY CACHED
+    // ─────────────────────────────────
+
+    const exists =
+      await this.offlineVault
+        .fileExists(
+          fileName
+        );
+
+    if (exists) {
+
+      console.log(
+        '⚡ Using existing cache',
+        fileName
+      );
+
+      return true;
+    }
+
+    console.log(
+      '☁️ Downloading file',
+      fileName
+    );
+
+    // ─────────────────────────────────
+    // GET SIGNED URL
+    // ─────────────────────────────────
+
+    const signedUrl =
+      await this.supabaseService
+        .getSignedUrl(doc.file_url);
+
+    if (!signedUrl) {
+
+      return false;
+    }
+
+    // ─────────────────────────────────
+    // DOWNLOAD ENCRYPTED FILE
+    // ─────────────────────────────────
+
+    const res =
+      await fetch(
+        signedUrl
+      );
+
+    const encryptedText =
+      await res.text();
+
+    // ─────────────────────────────────
+    // SAVE LOCAL FILE
+    // ─────────────────────────────────
+
+    const localPath =
+      await this.offlineVault
+        .saveEncryptedFile(
+          fileName,
+          encryptedText
+        );
+
+    // ─────────────────────────────────
+    // UPDATE DEXIE
+    // ─────────────────────────────────
+
+    await this.offlineVault
+      .documents
+      .update(
+        doc.id,
+        {
+          local_path:
+            localPath
+        }
+      );
+
+    // ─────────────────────────────────
+    // GENERATE THUMBNAIL ONCE
+    // ─────────────────────────────────
+
+    try {
+
+      const key =
+        this.vaultService
+          .currentKey;
+
+      const decrypted =
+        decryptData(
+          encryptedText,
+          key
+        );
+
+      const safeBuffer =
+        new Uint8Array(
+          decrypted
+        ).buffer;
+
+      const mimeType =
+        doc.file_type ||
+        'application/octet-stream';
+
+      const blob =
+        new Blob(
+          [safeBuffer],
+          {
+            type: mimeType
+          }
+        );
+
+      const blobUrl =
+        URL.createObjectURL(
+          blob
+        );
+
+      await this
+        .generateAndCacheThumbnail(
+          doc,
+          fileName,
+          blobUrl
+        );
+
+      URL.revokeObjectURL(
+        blobUrl
+      );
+
+    } catch (thumbErr) {
+
+      console.error(
+        '❌ Thumbnail generation failed',
+        thumbErr
+      );
+    }
+
+    console.log(
+      '✅ File cached locally'
+    );
+
+    return true;
+
+  } catch (e) {
+
+    console.error(
+      '❌ ensureLocalFile failed',
+      e
+    );
+
+    return false;
   }
 }
 }

@@ -6,8 +6,6 @@ import {
   ModalController
 } from '@ionic/angular';
 
-import { VaultService }
-from 'src/app/services/vault.service';
 
 @Component({
   selector: 'app-vault-unlock',
@@ -30,12 +28,13 @@ isUnlocking = false;
 
   constructor(
     private modalCtrl: ModalController,
-    private vaultService: VaultService
   ) {}
 
 async unlock() {
 
   this.error = '';
+
+  // ❌ empty password
 
   if (!this.password?.trim()) {
 
@@ -45,26 +44,14 @@ async unlock() {
     return;
   }
 
+  // 🔄 UI loading
+
   this.isUnlocking = true;
 
   try {
 
-    const valid =
-      await this.vaultService
-        .validatePassword(this.password);
+    // ✅ ONLY RETURN PASSWORD
 
-    // ❌ invalid
-    if (!valid) {
-
-      this.error =
-        'Invalid vault password';
-
-      this.isUnlocking = false;
-
-      return;
-    }
-
-    // ✅ success
     this.modalCtrl.dismiss(
       this.password
     );

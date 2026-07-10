@@ -13,6 +13,8 @@ export class VaultService {
 private lockListeners:
   ((locked: boolean) => void)[] = [];
   isUnlocking = false;
+  private unlockPromise:
+  Promise<string | null> | null = null;
   constructor(private modalCtrl: ModalController, private supabaseService: SupabaseService) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -165,7 +167,43 @@ private lockListeners:
 // GET VAULT KEY
 // =====================================
 
+// =====================================
+// GET VAULT KEY
+// =====================================
+
 async getVaultKey():
+Promise<string | null> {
+
+  // =====================================
+  // PREVENT MULTIPLE UNLOCKS
+  // =====================================
+
+  if (this.unlockPromise) {
+
+    return this.unlockPromise;
+  }
+
+  // =====================================
+  // SINGLE UNLOCK FLOW
+  // =====================================
+
+  this.unlockPromise =
+    this.internalGetVaultKey();
+
+  const result =
+    await this.unlockPromise;
+
+  this.unlockPromise =
+    null;
+
+  return result;
+}
+
+// =====================================
+// INTERNAL GET VAULT KEY
+// =====================================
+
+private async internalGetVaultKey():
 Promise<string | null> {
 
   // =====================================
@@ -218,8 +256,6 @@ Promise<string | null> {
 
   this.isUnlocking = true;
 
-  // 🔥 allow UI render
-
   await new Promise(
     resolve =>
       setTimeout(
@@ -229,15 +265,17 @@ Promise<string | null> {
   );
 
   // =====================================
-  // VALIDATE PASSWORD
+  // VALIDATE + GET KEY
   // =====================================
 
-  const valid =
+  const key =
     await this.validatePassword(
       password
     );
 
-  if (!valid) {
+  // ❌ invalid
+
+  if (!key) {
 
     console.error(
       '❌ Invalid password'
@@ -247,75 +285,6 @@ Promise<string | null> {
 
     return null;
   }
-
-  // =====================================
-  // GET VAULT META
-  // =====================================
-
-  let vaultData: any = null;
-
-  // 🌐 ONLINE
-
-  if (navigator.onLine) {
-
-    const {
-      data: userData
-    } =
-      await this.supabaseService
-        .getCurrentUser();
-
-    const userId =
-      userData.user?.id;
-
-    if (!userId) {
-
-      this.isUnlocking = false;
-
-      return null;
-    }
-
-    const {
-      data
-    } =
-      await this.supabaseService
-        .getVaultData(
-          userId
-        );
-
-    vaultData = data;
-  }
-
-  // 📴 OFFLINE
-
-  else {
-
-    vaultData =
-      await this
-        .getLocalVaultMeta();
-  }
-
-  // ❌ no salt
-
-  if (!vaultData?.salt) {
-
-    console.error(
-      '❌ Salt missing'
-    );
-
-    this.isUnlocking = false;
-
-    return null;
-  }
-
-  // =====================================
-  // DERIVE KEY
-  // =====================================
-
-  const key =
-    this.deriveKey(
-      password,
-      vaultData.salt
-    );
 
   // =====================================
   // SAVE MEMORY KEY
@@ -328,10 +297,6 @@ Promise<string | null> {
   console.log(
     '🔓 Vault unlocked'
   );
-
-  // =====================================
-  // HIDE LOADER
-  // =====================================
 
   this.isUnlocking = false;
 
@@ -351,7 +316,7 @@ private deriveKey(password: string, salt: string): string {
 
 async validatePassword(
   password: string
-): Promise<boolean> {
+): Promise<string | null> {
 
   try {
 
@@ -381,7 +346,7 @@ async validatePassword(
         userData.user?.id;
 
       if (!userId) {
-        return false;
+        return null;
       }
 
       const {
@@ -393,7 +358,7 @@ async validatePassword(
           );
 
       if (!data) {
-        return false;
+        return null;
       }
 
       vaultData = data;
@@ -432,7 +397,7 @@ async validatePassword(
         '❌ Vault data missing'
       );
 
-      return false;
+      return null;
     }
 
     // =====================================
@@ -466,8 +431,17 @@ async validatePassword(
       decrypted
     );
 
-    return decrypted ===
-      'vault-check';
+    // ✅ valid
+
+    if (
+      decrypted ===
+      'vault-check'
+    ) {
+
+      return key;
+    }
+
+    return null;
 
   } catch (e) {
 
@@ -476,7 +450,7 @@ async validatePassword(
       e
     );
 
-    return false;
+    return null;
   }
 }
 
@@ -588,21 +562,32 @@ async saveVaultMeta(
   vaultCheck: string
 ) {
 
+  console.log(
+    '💾 SAVING VAULT META'
+  );
+
+  console.log(
+    'SALT:',
+    salt
+  );
+
+  console.log(
+    'CHECK:',
+    vaultCheck
+  );
+
   await Preferences.set({
+    key: 'vault_salt',
+    value: salt
+  });
 
-    key: 'vault_meta',
-
-    value: JSON.stringify({
-
-      salt,
-
-      vault_check:
-        vaultCheck
-    })
+  await Preferences.set({
+    key: 'vault_check',
+    value: vaultCheck
   });
 
   console.log(
-    '💾 Vault meta saved'
+    '✅ VAULT META SAVED'
   );
 }
 
@@ -612,15 +597,31 @@ async saveVaultMeta(
 
 async getLocalVaultMeta() {
 
-  const { value } =
+  const salt =
     await Preferences.get({
-
-      key: 'vault_meta'
+      key: 'vault_salt'
     });
 
-  return JSON.parse(
-    value || '{}'
+  const vaultCheck =
+    await Preferences.get({
+      key: 'vault_check'
+    });
+
+  console.log(
+    '📦 LOCAL SALT',
+    salt.value
   );
+
+  console.log(
+    '📦 LOCAL CHECK',
+    vaultCheck.value
+  );
+
+  return {
+    salt: salt.value,
+    vault_check:
+      vaultCheck.value
+  };
 }
 
 // =====================================
