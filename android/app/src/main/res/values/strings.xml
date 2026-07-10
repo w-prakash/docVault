@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name">docvault</string>
     <string name="title_activity_main">docvault</string>
-    <string name="package_name">io.ionic.starter</string>
-    <string name="custom_url_scheme">io.ionic.starter</string>
+    <string name="package_name">com.docvault.app</string>
+    <string name="custom_url_scheme">com.docvault.app</string>
+        <!-- Google OAuth Web Client ID -->
+    <string name="server_client_id">
+        48865696360-p7beskba51idnh7e9doqhd3s1rhu3lvd.apps.googleusercontent.com
+    </string>
 </resources>
