@@ -509,19 +509,40 @@ clearKey() {
 //     return false;
 //   }
 // }
+// async tryBiometricUnlock(): Promise<boolean> {
+//   try {
+//     const availability = await BiometricAuth.checkBiometry();
+
+//     // ❌ If device itself is not secure → nothing can be done
+//     if (!availability.deviceIsSecure) {
+//       return false;
+//     }
+
+//     // ✅ Always try authentication
+//     // This will:
+//     // - Use fingerprint if available
+//     // - Otherwise show PIN/Pattern
+//     await BiometricAuth.authenticate({
+//       reason: 'Unlock your vault',
+//       cancelTitle: 'Cancel',
+//       allowDeviceCredential: true
+//     });
+
+//     return true;
+
+//   } catch (error) {
+//     console.warn('Auth failed or cancelled', error);
+//     return false;
+//   }
+// }
 async tryBiometricUnlock(): Promise<boolean> {
   try {
     const availability = await BiometricAuth.checkBiometry();
 
-    // ❌ If device itself is not secure → nothing can be done
-    if (!availability.deviceIsSecure) {
+    if (!availability.isAvailable) {
       return false;
     }
 
-    // ✅ Always try authentication
-    // This will:
-    // - Use fingerprint if available
-    // - Otherwise show PIN/Pattern
     await BiometricAuth.authenticate({
       reason: 'Unlock your vault',
       cancelTitle: 'Cancel',
@@ -535,7 +556,6 @@ async tryBiometricUnlock(): Promise<boolean> {
     return false;
   }
 }
-
 //onLockChange
 onLockChange(
   callback: (locked: boolean) => void

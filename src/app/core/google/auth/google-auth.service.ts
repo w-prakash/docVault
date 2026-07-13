@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
+import { OAuth2Client } from '@byteowls/capacitor-oauth2';
 import { GoogleSessionService } from '../session/google-session.service';
-import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { GoogleUser } from './google-auth.models';
+import { googleOAuthConfig } from './google-oauth.config';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -9,49 +11,65 @@ export class GoogleAuthService {
 
   constructor(
     private readonly sessionService: GoogleSessionService
-  ) {  GoogleAuth.initialize();
-}
+  ) {}
 
-async signIn(): Promise<GoogleUser> {
+  async signIn(): Promise<GoogleUser> {
 
-  const user = await GoogleAuth.signIn();
+    const response: any = await OAuth2Client.authenticate(googleOAuthConfig);
 
-  const googleUser: GoogleUser = {
-    id: user.id,
-    email: user.email,
-    displayName: user.name,
-    givenName: user.givenName,
-    familyName: user.familyName,
-    imageUrl: user.imageUrl,
-    idToken: user.authentication.idToken,
-    accessToken: user.authentication.accessToken
-  };
+    const googleUser = this.mapResponseToUser(response);
 
-  this.sessionService.updateSession({
-    isAuthenticated: true,
-    user: googleUser
-  });
+    this.sessionService.updateSession({
+      isAuthenticated: true,
+      user: googleUser
+    });
 
-  return googleUser;
-}
+    return googleUser;
 
-async signOut(): Promise<void> {
-
-  await GoogleAuth.signOut();
-
-  this.sessionService.clearSession();
-
-}
-
-async restoreSession(): Promise<boolean> {
-  try {
-    await GoogleAuth.refresh();
-
-    return true;
-
-  } catch {
-    this.sessionService.clearSession();
-    return false;
   }
-}
+
+  async signOut(): Promise<void> {
+
+    try {
+      await OAuth2Client.logout(googleOAuthConfig);
+    } catch (err) {
+      // logout can throw if there's no active native session — safe to ignore
+      console.warn('OAuth2Client.logout warning:', err);
+    }
+
+    this.sessionService.clearSession();
+
+  }
+
+  async restoreSession(): Promise<boolean> {
+
+    return this.sessionService.currentSession.isAuthenticated;
+
+  }
+
+  private mapResponseToUser(response: any): GoogleUser {
+
+    // @byteowls/capacitor-oauth2 spreads the resourceUrl (userinfo) fields
+    // directly onto the response object alongside the token fields.
+    const accessToken = response?.access_token_response?.access_token
+      ?? response?.access_token
+      ?? '';
+
+    const idToken = response?.access_token_response?.id_token
+      ?? response?.id_token
+      ?? '';
+
+    return {
+      id: response?.id ?? response?.sub ?? '',
+      email: response?.email ?? '',
+      displayName: response?.name ?? '',
+      givenName: response?.given_name ?? '',
+      familyName: response?.family_name ?? '',
+      imageUrl: response?.picture ?? '',
+      idToken,
+      accessToken
+    };
+
+  }
+
 }

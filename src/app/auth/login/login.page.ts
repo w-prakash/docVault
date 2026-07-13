@@ -6,6 +6,8 @@ import { Router } from '@angular/router';
 import { SupabaseService }
 from '../../services/supabase.service';
 import { CommonModule } from '@angular/common';
+import { GoogleAuthService } from 'src/app/core/google/auth/google-auth.service';
+import { Capacitor } from '@capacitor/core';
 
 @Component({
   selector: 'app-login',
@@ -32,9 +34,13 @@ export class LoginPage {
 
   constructor(
     private router: Router,
-    private supabaseService: SupabaseService
+    private supabaseService: SupabaseService,
+      private googleAuthService: GoogleAuthService,
   ) {}
 
+  ngOnInit() {
+      console.log('Platform:', Capacitor.getPlatform());
+  }
   async login() {
 
     this.error = '';
@@ -93,4 +99,34 @@ if (error.code === 'invalid_credentials') {
 
     }
   }
+
+async testGoogleLogin() {
+
+  this.error = '';
+  this.isLoading = true;
+
+  try {
+
+    const user = await this.googleAuthService.signIn();
+
+    console.log('Google User', user);
+
+    console.log('Before Navigation');
+
+await this.router.navigateByUrl('/dashboard', {
+  replaceUrl: true
+});
+    console.log('After Navigation');
+
+  } catch (e) {
+
+    console.error(e);
+
+  } finally {
+
+    this.isLoading = false;
+
+  }
+
+}
 }
