@@ -23,8 +23,22 @@
 
   <div class="page-container">
 
+    <!-- User Profile -->
+    <div class="user-profile" *ngIf="profile">
+
+      <img
+        [src]="profile.photoUrl"
+        class="user-avatar"
+        alt="Profile">
+
+      <h3>{{ profile.displayName }}</h3>
+
+      <!-- <p>Welcome back 👋</p> -->
+
+    </div>
+
     <div class="page-header">
-      <h2>Welcome 👋</h2>
+      <h2>Welcome back 👋</h2>
       <p>Your secure document vault</p>
     </div>
 
@@ -49,12 +63,7 @@
         <span>🆔</span>
         <p>ID Cards</p>
       </div>
-<!-- <ion-button
-  (click)="vaultService.clearKey()">
 
-  Test Vault Lock
-
-</ion-button> -->
     </div>
 
   </div>

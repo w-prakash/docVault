@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { IonicModule } from '@ionic/angular';
 import { VaultService } from '../services/vault.service';
+import { UserProfile, UserService } from '../services/user.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -12,8 +13,9 @@ import { VaultService } from '../services/vault.service';
   imports: [IonicModule, CommonModule, FormsModule],
 })
 export class DashboardPage implements OnInit {
+  profile: UserProfile | null = null;
 
-  constructor(private router: Router,   public vaultService: VaultService
+  constructor(private router: Router,   public vaultService: VaultService, private userService: UserService
 ) {}
 
   goToUpload() {
@@ -24,6 +26,7 @@ export class DashboardPage implements OnInit {
     this.router.navigateByUrl('/documents');
   }
   ngOnInit() {
+        this.userService.profile$.subscribe(profile => this.profile = profile);
   }
 
 }

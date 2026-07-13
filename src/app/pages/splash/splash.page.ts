@@ -1,14 +1,8 @@
 import { CommonModule } from '@angular/common';
-import {
-  Component,
-  OnInit
-} from '@angular/core';
-import { AuthService }
-from 'src/app/services/auth.service';
-import {
-  Router
-} from '@angular/router';
+import { Component, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { IonicModule } from '@ionic/angular';
+import { GoogleAuthService } from 'src/app/core/google/auth/google-auth.service';
 
 @Component({
   selector: 'app-splash',
@@ -16,54 +10,27 @@ import { IonicModule } from '@ionic/angular';
   imports: [IonicModule, CommonModule],
   styleUrls: ['./splash.page.scss']
 })
-export class SplashPage
-implements OnInit {
+export class SplashPage implements OnInit {
 
   constructor(
     private router: Router,
-  private authService:
-    AuthService
+    private googleAuthService: GoogleAuthService
   ) {}
 
-async ngOnInit() {
+  async ngOnInit() {
 
-  // small splash delay
+    // small splash delay
+    await new Promise(resolve => setTimeout(resolve, 1800));
 
-  await new Promise(
-    resolve =>
-      setTimeout(
-        resolve,
-        1800
-      )
-  );
+    // 🔐 restore Google session
+    const loggedIn = await this.googleAuthService.restoreSession();
 
-  // 🔐 restore session
-
-  const loggedIn =
-    await this.authService
-      .isLoggedIn();
-
-  // ✅ session exists
-
-  if (loggedIn) {
-
-    this.router.navigateByUrl(
-      '/dashboard',
-      {
-        replaceUrl: true
-      }
-    );
-
-    return;
-  }
-
-  // ❌ no session
-
-  this.router.navigateByUrl(
-    '/login',
-    {
-      replaceUrl: true
+    if (loggedIn) {
+      this.router.navigateByUrl('/dashboard', { replaceUrl: true });
+      return;
     }
-  );
-}
+
+    this.router.navigateByUrl('/login', { replaceUrl: true });
+
+  }
 }

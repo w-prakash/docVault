@@ -7,6 +7,7 @@ export interface GoogleUser {
   imageUrl?: string;
   idToken: string;
   accessToken?: string;
+  photoUrl?: string;
 }
 
 export interface GoogleSession {

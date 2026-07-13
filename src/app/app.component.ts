@@ -1,12 +1,6 @@
-// app.component.ts
-
 import { Component } from '@angular/core';
-
-import { VaultService }
-from './services/vault.service';
-
-import { AuthService }
-from './services/auth.service';
+import { VaultService } from './services/vault.service';
+import { GoogleAuthService } from './core/google/auth/google-auth.service';
 
 @Component({
   selector: 'app-root',
@@ -14,46 +8,35 @@ from './services/auth.service';
   styleUrls: ['app.component.scss'],
   standalone: false,
 })
-
 export class AppComponent {
 
   showVaultLock = false;
 
   constructor(
-
-    public vaultService:
-      VaultService,
-
-    private authService:
-      AuthService
+    public vaultService: VaultService,
+    private googleAuthService: GoogleAuthService
   ) {}
 
   ngOnInit() {
 
-    this.vaultService.onLockChange(
-      (locked) => {
+    this.vaultService.onLockChange((locked) => {
 
-        if (locked) {
+      if (locked) {
 
-          this.showVaultLock = true;
+        this.showVaultLock = true;
 
-          setTimeout(() => {
-
-            this.showVaultLock = false;
-
-          }, 1600);
-        }
+        setTimeout(() => {
+          this.showVaultLock = false;
+        }, 1600);
       }
-    );
+    });
   }
-
-  // =====================================
-  // LOGOUT
-  // =====================================
 
   async logout() {
 
-    await this.authService
-      .logout();
+    await this.googleAuthService.signOut();
+
+    window.location.href = '/login';
+
   }
 }

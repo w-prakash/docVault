@@ -23,99 +23,32 @@
     <!-- LOGIN CARD -->
     <div class="glass-card login-card">
 
-      <!-- EMAIL -->
-      <div class="input-label">
-        Email Address
-      </div>
+      <ion-button
+        expand="block"
+        class="login-btn"
+        (click)="loginWithGoogle()"
+        [disabled]="isLoading">
 
-      <ion-item
-        lines="none"
-        class="app-input">
+        <ion-spinner
+          *ngIf="isLoading"
+          slot="start"
+          name="crescent">
+        </ion-spinner>
 
-        <ion-input
-          type="email"
-          placeholder="Enter email"
-          [(ngModel)]="email">
+        {{
+          isLoading
+            ? 'Signing In...'
+            : 'Sign in with Google'
+        }}
 
-        </ion-input>
+      </ion-button>
 
-      </ion-item>
+      <p class="login-error" *ngIf="error">
+        {{ error }}
+      </p>
 
-      <!-- PASSWORD -->
-      <div class="input-label">
-        Password
-      </div>
-
-      <ion-item
-        lines="none"
-        class="app-input">
-
-        <ion-input
-          [type]="showPassword ? 'text' : 'password'"
-          placeholder="Enter password"
-          [(ngModel)]="password">
-
-        </ion-input>
-
-        <ion-button
-          fill="clear"
-          slot="end"
-          class="eye-btn"
-          (click)="showPassword = !showPassword">
-
-          <ion-icon
-            [name]="showPassword ? 'eye-off-outline' : 'eye-outline'">
-          </ion-icon>
-
-        </ion-button>
-
-      </ion-item>
-
-      <!-- REMEMBER -->
-      <div class="remember-row">
-
-        <div class="remember-left">
-
-          <ion-checkbox></ion-checkbox>
-
-          <span>
-            Remember me
-          </span>
-
-        </div>
-
-        <button class="forgot-btn">
-          Forgot Password?
-        </button>
-      </div>
-
-      <!-- BUTTON -->
-<ion-button
-  expand="block"
-  class="login-btn"
-  (click)="login()"
-  [disabled]="isLoading">
-
-  <ion-spinner
-    *ngIf="isLoading"
-    slot="start"
-    name="crescent">
-  </ion-spinner>
-
-  {{
-    isLoading
-      ? 'Signing In...'
-      : 'Secure Login'
-  }}
-
-</ion-button>
-<p class="login-error" *ngIf="error">
-  {{ error }}
-</p>
     </div>
 
   </div>
-<ion-button expand="block"  color="danger" (click)="testGoogleLogin()">
-  Test Google Login
-</ion-button>
+
 </ion-content>

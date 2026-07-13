@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   IonicModule,
@@ -25,6 +25,7 @@ isUnlocking = false;
   password = '';
 
   error = '';
+@Input() mode: 'unlock' | 'create' = 'unlock';
 
   constructor(
     private modalCtrl: ModalController,
@@ -71,4 +72,14 @@ async unlock() {
   cancel() {
     this.modalCtrl.dismiss(null);
   }
+
+  get title(): string {
+  return this.mode === 'create' ? 'Create Vault Password' : 'Unlock Vault';
+}
+
+get subtitle(): string {
+  return this.mode === 'create'
+    ? 'Set a password to protect your encrypted files on this device.'
+    : 'Enter your vault password to access encrypted files.';
+}
 }

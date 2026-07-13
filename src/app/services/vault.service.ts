@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import * as CryptoJS from 'crypto-js';
 import { ModalController } from '@ionic/angular';
 import { VaultUnlockComponent } from '../components/vault-unlock/vault-unlock.component';
-import { SupabaseService } from './supabase.service';
+// import { SupabaseService } from './supabase.service';
 import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
 import { Preferences } from '@capacitor/preferences';
 @Injectable({ providedIn: 'root' })
@@ -15,7 +15,7 @@ private lockListeners:
   isUnlocking = false;
   private unlockPromise:
   Promise<string | null> | null = null;
-  constructor(private modalCtrl: ModalController, private supabaseService: SupabaseService) {
+  constructor(private modalCtrl: ModalController) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
          this.clearKey();
@@ -314,158 +314,75 @@ private deriveKey(password: string, salt: string): string {
   return key.toString();
 }
 
-async validatePassword(
-  password: string
-): Promise<string | null> {
+async validatePassword(password: string): Promise<string | null> {
 
   try {
 
-    console.log(
-      '🔐 VALIDATING PASSWORD'
-    );
+    console.log('🔐 VALIDATING PASSWORD');
 
-    let vaultData: any = null;
+    const vaultData = await this.getLocalVaultMeta();
 
-    // =====================================
-    // ONLINE
-    // =====================================
-
-    if (navigator.onLine) {
-
-      console.log(
-        '🌐 ONLINE VALIDATION'
-      );
-
-      const {
-        data: userData
-      } =
-        await this.supabaseService
-          .getCurrentUser();
-
-      const userId =
-        userData.user?.id;
-
-      if (!userId) {
-        return null;
-      }
-
-      const {
-        data
-      } =
-        await this.supabaseService
-          .getVaultData(
-            userId
-          );
-
-      if (!data) {
-        return null;
-      }
-
-      vaultData = data;
-
-      // 💾 save locally
-
-      await this.saveVaultMeta(
-        data.salt,
-        data.vault_check
-      );
-    }
-
-    // =====================================
-    // OFFLINE
-    // =====================================
-
-    else {
-
-      console.log(
-        '📴 OFFLINE VALIDATION'
-      );
-
-      vaultData =
-        await this
-          .getLocalVaultMeta();
-    }
-
-    // ❌ no vault data
-
-    if (
-      !vaultData?.salt ||
-      !vaultData?.vault_check
-    ) {
-
-      console.error(
-        '❌ Vault data missing'
-      );
-
+    if (!vaultData?.salt || !vaultData?.vault_check) {
+      console.error('❌ Vault data missing');
       return null;
     }
 
-    // =====================================
-    // DERIVE KEY
-    // =====================================
+    const key = this.deriveKey(password, vaultData.salt);
 
-    const key =
-      this.deriveKey(
-        password,
-        vaultData.salt
-      );
+    const decrypted = CryptoJS.AES.decrypt(
+      vaultData.vault_check,
+      key
+    ).toString(CryptoJS.enc.Utf8);
 
-    console.log(
-      '🗝 DERIVED KEY'
-    );
-
-    // =====================================
-    // VALIDATE
-    // =====================================
-
-    const decrypted =
-      CryptoJS.AES.decrypt(
-        vaultData.vault_check,
-        key
-      ).toString(
-        CryptoJS.enc.Utf8
-      );
-
-    console.log(
-      '🔓 DECRYPTED',
-      decrypted
-    );
-
-    // ✅ valid
-
-    if (
-      decrypted ===
-      'vault-check'
-    ) {
-
+    if (decrypted === 'vault-check') {
       return key;
     }
 
     return null;
 
   } catch (e) {
-
-    console.error(
-      '❌ VALIDATION ERROR',
-      e
-    );
-
+    console.error('❌ VALIDATION ERROR', e);
     return null;
   }
 }
 
+async ensureVault(): Promise<void> {
+
+  const existing = await this.getLocalVaultMeta();
+
+  if (existing?.salt && existing?.vault_check) {
+    // already provisioned on this device
+    return;
+  }
+
+  const password = await this.openUnlockModal('create');
+
+  if (!password) {
+    throw new Error('Vault setup was cancelled');
+  }
+
+  const salt = CryptoJS.lib.WordArray.random(128 / 8).toString();
+  const key = this.deriveKey(password, salt);
+  const vaultCheck = CryptoJS.AES.encrypt('vault-check', key).toString();
+
+  await this.saveVaultMeta(salt, vaultCheck);
+
+  console.log('✅ Vault provisioned locally');
+}
 
   // 🔓 modal open
-  private async openUnlockModal(): Promise<string | null> {
-    const modal = await this.modalCtrl.create({
-      component: VaultUnlockComponent
-    });
+private async openUnlockModal(mode: 'unlock' | 'create' = 'unlock'): Promise<string | null> {
 
-    await modal.present();
+  const modal = await this.modalCtrl.create({
+    component: VaultUnlockComponent,
+    componentProps: { mode }
+  });
 
-    const { data } = await modal.onDidDismiss();
-    return data;
-  }
+  await modal.present();
+
+  const { data } = await modal.onDidDismiss();
+  return data;
+}
 
   // 🔒 auto lock after 5 min
   private startAutoLock() {
