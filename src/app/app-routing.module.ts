@@ -46,6 +46,12 @@ const routes: Routes = [
     import('./pages/documents/documents.page').then((m) => m.DocumentsPage),
   },
   {
+    path: 'settings',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+    import('./settings/settings/settings.page').then((m) => m.SettingsPage),
+  },
+  {
     path: 'splash',
     loadComponent: () =>
     import('./pages/splash/splash.page').then((m) => m.SplashPage),

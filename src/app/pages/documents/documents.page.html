@@ -217,6 +217,10 @@
     <div class="file-card" *ngFor="let doc of documents"  [class.restoring]="doc.isRestoring"  [class.deleting]="doc.isDeleting">
 
 <div class="thumb">
+<div class="download-progress-overlay" *ngIf="doc.isDownloading">
+  <ion-spinner name="crescent"></ion-spinner>
+  <span *ngIf="doc.downloadProgress">{{ doc.downloadProgress }}%</span>
+</div>
 <div class="overlay-actions">
 
   <ion-button fill="clear" (click)="viewDoc(doc)">

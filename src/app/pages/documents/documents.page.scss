@@ -326,6 +326,31 @@ ion-searchbar {
   --color: white;
 }
 
+.download-progress-overlay {
+  position: absolute;
+  inset: 0;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  background: rgba(10, 14, 39, 0.72);
+  backdrop-filter: blur(4px);
+
+  z-index: 30;
+
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+
+  ion-spinner {
+    width: 26px;
+    height: 26px;
+  }
+}
+
 /* ======================================================
    PDF BADGE
 ====================================================== */

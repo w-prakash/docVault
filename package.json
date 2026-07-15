@@ -36,6 +36,7 @@
     "@capacitor/status-bar": "^4.0.1",
     "@ionic/angular": "^8.0.0",
     "@supabase/supabase-js": "^2.105.1",
+    "capacitor-secure-storage-plugin": "^0.8.1",
     "crypto-js": "^4.2.0",
     "dexie": "^4.4.2",
     "ionicons": "^7.4.0",

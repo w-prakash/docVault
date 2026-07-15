@@ -1,71 +1,204 @@
-<ion-header
-  class="app-header">
-
+<ion-header class="app-header">
   <ion-toolbar>
-
-    <!-- ☰ MENU -->
-
     <ion-buttons slot="start">
-
-      <ion-menu-button>
-      </ion-menu-button>
-
+      <ion-menu-button></ion-menu-button>
     </ion-buttons>
 
-    <ion-title>
-      Dashboard
-    </ion-title>
+    <ion-title>Dashboard</ion-title>
 
+    <ion-buttons slot="end">
+      <ion-button (click)="comingSoon('Notifications')" class="bell-btn">
+        <ion-icon name="notifications-outline" slot="icon-only"></ion-icon>
+        <span class="bell-dot"></span>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
-
 </ion-header>
-<ion-content class="app-bg">
+
+<ion-content class="app-bg dashboard-bg">
 
   <div class="page-container">
 
-    <!-- User Profile -->
-    <div class="user-profile" *ngIf="profile">
+    <!-- GREETING -->
+    <div class="greeting-row" *ngIf="userService.profile$ | async as profile">
 
-      <img
-        [src]="profile.photoUrl"
-        class="user-avatar"
-        alt="Profile">
+      <div class="avatar-ring">
+        <img
+          *ngIf="profile.photoUrl && !avatarError"
+          [src]="profile.photoUrl"
+          class="user-avatar"
+          alt="Profile"
+          referrerpolicy="no-referrer"
+          (error)="avatarError = true">
+        <div *ngIf="!profile.photoUrl || avatarError" class="user-avatar user-avatar-fallback">
+          {{ profile.displayName?.charAt(0) }}
+        </div>
+      </div>
 
-      <h3>{{ profile.displayName }}</h3>
-
-      <!-- <p>Welcome back 👋</p> -->
+      <div class="greeting-text">
+        <p class="greeting-eyebrow">{{ greeting }},</p>
+        <h1>
+          <span class="name-lead">{{ nameLead(profile.displayName) }}</span>
+          <span class="name-accent" *ngIf="nameAccent(profile.displayName)"> {{ nameAccent(profile.displayName) }}</span>
+        </h1>
+        <p class="greeting-sub">Manage your secure vault</p>
+      </div>
 
     </div>
 
-    <div class="page-header">
-      <h2>Welcome back 👋</h2>
-      <p>Your secure document vault</p>
+    <!-- STATS -->
+    <div class="glass-card stats-card">
+
+      <div class="stat-item">
+        <div class="stat-icon stat-icon--blue">
+          <ion-icon name="document-text-outline"></ion-icon>
+        </div>
+        <div class="stat-copy">
+          <h3>{{ documentCount }}</h3>
+          <p class="stat-label">Documents</p>
+          <p class="stat-caption">Total Files</p>
+        </div>
+      </div>
+
+      <div class="stat-divider"></div>
+
+      <div class="stat-item">
+        <div class="stat-icon stat-icon--teal">
+          <ion-icon [name]="isOnline ? 'cloud-done-outline' : 'cloud-offline-outline'"></ion-icon>
+        </div>
+        <div class="stat-copy">
+          <h3>{{ isOnline ? 'Synced' : 'Offline' }}</h3>
+          <p class="stat-label">{{ isOnline ? 'All up to date' : 'Waiting to sync' }}</p>
+          <p class="stat-caption">{{ lastSync ? ('Last sync: ' + lastSync) : 'Not synced yet' }}</p>
+        </div>
+      </div>
+
+      <div class="stat-divider"></div>
+
+      <div class="stat-item">
+        <div class="stat-icon stat-icon--purple">
+          <ion-icon name="shield-checkmark-outline"></ion-icon>
+        </div>
+        <div class="stat-copy">
+          <h3>AES-256</h3>
+          <p class="stat-label">Protected</p>
+          <p class="stat-caption">End-to-end security</p>
+        </div>
+      </div>
+
     </div>
 
-    <div class="app-grid">
+    <!-- FEATURE GRID -->
+    <div class="feature-grid">
 
-      <div class="glass-card app-widget" (click)="goToUpload()">
-        <span>📤</span>
-        <p>Upload</p>
+      <div class="glass-card feature-card feature-card--upload" (click)="goToUpload()">
+        <div class="feature-icon">
+          <ion-icon name="cloud-upload-outline"></ion-icon>
+        </div>
+        <div class="feature-copy">
+          <h4>Upload Documents</h4>
+          <p>Upload PDFs and images securely</p>
+        </div>
+        <ion-icon name="chevron-forward" class="feature-chevron"></ion-icon>
       </div>
 
-      <div class="glass-card app-widget" (click)="goToDocuments()">
-        <span>📄</span>
-        <p>Documents</p>
+      <div class="glass-card feature-card feature-card--documents" (click)="goToDocuments()">
+        <div class="feature-icon">
+          <ion-icon name="document-text-outline"></ion-icon>
+        </div>
+        <div class="feature-copy">
+          <h4>Documents</h4>
+          <p>View and manage your documents</p>
+        </div>
+        <ion-icon name="chevron-forward" class="feature-chevron"></ion-icon>
       </div>
 
-      <div class="glass-card app-widget">
-        <span>🏥</span>
-        <p>Reports</p>
+      <div class="glass-card feature-card feature-card--reports" (click)="comingSoon('Reports')">
+        <div class="feature-icon">
+          <ion-icon name="medkit-outline"></ion-icon>
+        </div>
+        <div class="feature-copy">
+          <h4>Reports</h4>
+          <p>Access your medical reports</p>
+        </div>
+        <ion-icon name="chevron-forward" class="feature-chevron"></ion-icon>
       </div>
 
-      <div class="glass-card app-widget">
-        <span>🆔</span>
-        <p>ID Cards</p>
+      <div class="glass-card feature-card feature-card--id" (click)="comingSoon('ID Cards')">
+        <div class="feature-icon">
+          <ion-icon name="card-outline"></ion-icon>
+        </div>
+        <div class="feature-copy">
+          <h4>ID Cards</h4>
+          <p>Store and manage your ID cards</p>
+        </div>
+        <ion-icon name="chevron-forward" class="feature-chevron"></ion-icon>
       </div>
+
+    </div>
+
+    <!-- RECENT DOCUMENTS -->
+    <div class="glass-card recent-card">
+
+      <div class="recent-header">
+        <h4>Recent Documents</h4>
+        <a class="view-all" (click)="goToDocuments()">
+          View All
+          <ion-icon name="chevron-forward"></ion-icon>
+        </a>
+      </div>
+
+      <div class="recent-list" *ngIf="recentDocuments.length; else noDocs">
+
+        <div class="recent-item" *ngFor="let doc of recentDocuments">
+
+          <div class="recent-icon" [ngClass]="'recent-icon--' + doc.kind">
+            <ion-icon [name]="doc.kind === 'image' ? 'image-outline' : 'document-text-outline'"></ion-icon>
+          </div>
+
+          <div class="recent-copy">
+            <h5>{{ doc.name }}</h5>
+            <p>{{ doc.typeLabel }} &bull; {{ doc.createdAt | date: 'dd MMM yyyy' }}</p>
+          </div>
+
+          <ion-button fill="clear" class="recent-menu" (click)="comingSoon('Document options')">
+            <ion-icon name="ellipsis-vertical" slot="icon-only"></ion-icon>
+          </ion-button>
+
+        </div>
+
+      </div>
+
+      <ng-template #noDocs>
+        <div class="recent-empty">
+          <ion-icon name="document-outline"></ion-icon>
+          <p>No documents yet — upload your first file</p>
+        </div>
+      </ng-template>
 
     </div>
 
   </div>
 
 </ion-content>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+
+  <button class="nav-item" (click)="goToVault()">
+    <ion-icon name="lock-closed-outline"></ion-icon>
+    <span>Vault</span>
+  </button>
+
+  <button class="nav-item nav-item--home" (click)="goToHome()">
+    <span class="home-orb">
+      <ion-icon name="home"></ion-icon>
+    </span>
+  </button>
+
+  <button class="nav-item" (click)="goToSettings()">
+    <ion-icon name="settings-outline"></ion-icon>
+    <span>Settings</span>
+  </button>
+
+</div>

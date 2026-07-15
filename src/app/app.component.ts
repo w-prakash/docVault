@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { VaultService } from './services/vault.service';
 import { GoogleAuthService } from './core/google/auth/google-auth.service';
+import { GoogleSyncService } from './core/google/sync/google-sync.service';
 
 @Component({
   selector: 'app-root',
@@ -14,10 +15,15 @@ export class AppComponent {
 
   constructor(
     public vaultService: VaultService,
-    private googleAuthService: GoogleAuthService
+    private googleAuthService: GoogleAuthService,
+    private googleSyncService: GoogleSyncService
   ) {}
 
   ngOnInit() {
+
+    // Phase 8: drain any queued uploads/deletes whenever connectivity
+    // returns, regardless of which page is currently open.
+    this.googleSyncService.startAutoSync();
 
     this.vaultService.onLockChange((locked) => {
 

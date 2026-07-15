@@ -1,7 +1,11 @@
 import { Component, OnDestroy } from '@angular/core';
 import { IonicModule, ActionSheetController } from '@ionic/angular';
 import { CommonModule } from '@angular/common';
-import { SupabaseService } from '../../services/supabase.service';
+import { GoogleDriveService } from 'src/app/core/google/drive/google-drive.service';
+import { DocVaultFolderService } from 'src/app/core/google/drive/docvault-folder.service';
+import { DriveOfflineError } from 'src/app/core/google/drive/google-drive.models';
+import { GoogleSyncService } from 'src/app/core/google/sync/google-sync.service';
+import { ReferenceDataService } from 'src/app/services/reference-data.service';
 import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-browser';
 import * as pdfjsLib from 'pdfjs-dist';
 import { FormsModule } from '@angular/forms';
@@ -41,6 +45,8 @@ interface DocumentItem {
   types?: any;
   isDeleting?: boolean;
   isRestoring?: boolean;
+  isDownloading?: boolean;
+  downloadProgress?: number;
   preview?: string;
   local_path?: string | null;
   local_file_name?: string;
@@ -111,7 +117,10 @@ private isQueueProcessing = false;
 
   constructor(
     private offlineVault: OfflineVaultService,
-    private supabaseService: SupabaseService,
+    private driveService: GoogleDriveService,
+    private folderService: DocVaultFolderService,
+    private referenceDataService: ReferenceDataService,
+    private googleSyncService: GoogleSyncService,
     private sanitizer: DomSanitizer,
     private actionSheetCtrl: ActionSheetController,
     private alertCtrl: AlertController,
@@ -228,67 +237,29 @@ async loadMasterData() {
     }
 
     // ─────────────────────────────
-    // FETCH ONLINE ONLY IF EMPTY
+    // SEED LOCALLY IF EMPTY (no network required)
     // ─────────────────────────────
 
     console.log(
-      '🌐 Fetching master data'
+      '🌱 Seeding missing master data'
     );
 
-    const [
-      typesRes,
-      membersRes,
-      categoriesRes
-    ] = await Promise.all([
+    await this.referenceDataService.ensureDefaultCategories();
+    await this.referenceDataService.ensureDefaultMember();
 
-      this.supabaseService
-        .getAllTypes(),
+    this.members =
+      await this.offlineVault.getMembers();
 
-      this.supabaseService
-        .getMembers(),
+    this.categories =
+      await this.offlineVault.getCategories();
 
-      this.supabaseService
-        .getCategories()
-    ]);
+    this.allTypes =
+      await this.offlineVault.getTypes();
 
-    if (typesRes.data) {
-
-      this.allTypes =
-        typesRes.data;
-
-      this.types =
-        [...typesRes.data];
-
-      await this.offlineVault
-        .saveTypes(
-          typesRes.data
-        );
-    }
-
-    if (membersRes.data) {
-
-      this.members =
-        membersRes.data;
-
-      await this.offlineVault
-        .saveMembers(
-          membersRes.data
-        );
-    }
-
-    if (categoriesRes.data) {
-
-      this.categories =
-        categoriesRes.data;
-
-      await this.offlineVault
-        .saveCategories(
-          categoriesRes.data
-        );
-    }
+    this.types = [...this.allTypes];
 
     console.log(
-      '✅ Master data synced'
+      '✅ Master data ready'
     );
 
   } catch (e) {
@@ -645,11 +616,14 @@ console.log(
   localCount
 );
 
-let response;
+let response: { data: any[] | null; error: any };
 
 // ───────────────────────────────
 // FIRST INSTALL
 // ───────────────────────────────
+
+const folderId =
+  await this.folderService.getFolderId();
 
 if (localCount === 0) {
 
@@ -658,8 +632,7 @@ if (localCount === 0) {
   );
 
   response =
-    await this.supabaseService
-      .getDocuments();
+    await this.listDriveDocuments(folderId);
 }
 
 // ───────────────────────────────
@@ -678,10 +651,10 @@ else {
     );
 
   response =
-    await this.supabaseService
-      .getDocuments(
-        lastSync || undefined
-      );
+    await this.listDriveDocuments(
+      folderId,
+      lastSync || undefined
+    );
 }
 
 const {
@@ -736,36 +709,46 @@ const localMap =
 
       try {
 
-        const fileName = 
-          serverDoc.file_url
-            ?.split('/')
-            ?.pop();
-
-        if (!fileName) {
-          continue;
-        }
-
-        // ───────────────────────────
-        // CHECK LOCAL CACHE
-        // ───────────────────────────
-
-        const exists =
-          await this.offlineVault
-            .fileExists(
-              fileName
-            );
-
         // ───────────────────────────
         // FIND EXISTING DEXIE DOC
         // ───────────────────────────
 
-const existing =
-  localMap.get(
-    serverDoc.id
-  );
+        const existing =
+          localMap.get(
+            serverDoc.id
+          );
+
+        const props =
+          serverDoc.appProperties || {};
+
+        // ───────────────────────────
+        // CONFLICT RESOLUTION:
+        // if this file was deleted locally while offline and is queued
+        // for deletion, don't resurrect it just because Drive hasn't
+        // processed the delete yet. Local delete always wins.
+        // ───────────────────────────
+
+        if (!existing) {
+
+          const pendingDelete =
+            await this.googleSyncService.hasPendingDelete(serverDoc.id);
+
+          if (pendingDelete) {
+
+            console.log(
+              '🚫 Skipping resurrect — delete is queued for',
+              serverDoc.id
+            );
+
+            continue;
+          }
+        }
 
         // ───────────────────────────
         // NORMALIZED DOCUMENT
+        // (preserves any already-cached local file — never guesses
+        // a filename from the Drive name, since local filenames are
+        // timestamp-prefixed and won't match Drive's stored name)
         // ───────────────────────────
 
         const normalizedDoc = {
@@ -775,38 +758,63 @@ const existing =
           server_id:
             serverDoc.id,
 
+          // file_url drives local thumbnail/file lookup (attachThumbnail
+          // derives the cached filename from it) — never overwrite it with
+          // the Drive id, or an already-cached thumbnail becomes unreachable.
+          // Only fall back to the Drive id for docs with no known local
+          // file yet (e.g. synced fresh from another device).
           file_url:
-            serverDoc.file_url,
+            existing?.file_url
+              ?? existing?.local_file_name
+              ?? serverDoc.id,
 
           created_at:
-            serverDoc.created_at,
+            serverDoc.createdTime
+              ?? new Date().toISOString(),
 
           file_type:
-            serverDoc.file_type,
+            props['file_type']
+              || 'application/octet-stream',
+
+          member_id:
+            props['member_id'] || null,
+
+          category_id:
+            props['category_id'] || null,
+
+          type_id:
+            props['type_id'] || null,
 
           members:
-            serverDoc.members,
+            this.members.find(
+              m => m.id === props['member_id']
+            ),
 
           categories:
-            serverDoc.categories,
+            this.categories.find(
+              c => c.id === props['category_id']
+            ),
 
           types:
-            serverDoc.types,
+            this.allTypes.find(
+              t => t.id === props['type_id']
+            ),
 
           original_name:
-            fileName
-              .split('_')
-              .slice(1)
-              .join('_')
-              .replace('.enc', ''),
+            props['original_name']
+              || serverDoc.name.replace(/\.enc$/, ''),
+
+          local_file_name:
+            existing?.local_file_name
+              ?? null,
 
           local_path:
-            exists
-              ? `vault/${fileName}`
-              : null,
+            existing?.local_path
+              ?? null,
 
           thumbnail_path:
-            `thumbnails/${fileName}.thumb`,
+            existing?.thumbnail_path
+              ?? `thumbnails/${serverDoc.id}.thumb`,
 
           synced: true,
 
@@ -818,47 +826,9 @@ const existing =
         };
 
         // ───────────────────────────
-        // RESTORE THUMBNAIL
-        // ───────────────────────────
-
-        if (exists) {
-
-          await this.attachThumbnail(
-            normalizedDoc,
-            fileName
-          );
-        }
-
-        // ───────────────────────────
         // INSERT
         // ───────────────────────────
-console.log(
-  '━━━━━━━━━━━━━━'
-);
 
-console.log(
-  'SERVER DOC ID:',
-  serverDoc.id
-);
-
-console.log(
-  'FOUND EXISTING:',
-  existing
-);
-
-const allDocs =
-  await this.offlineVault
-    .documents
-    .toArray();
-
-console.log(
-  'ALL LOCAL DOCS:',
-  allDocs
-);
-
-console.log(
-  '━━━━━━━━━━━━━━'
-);
         if (!existing) {
 
           await this.offlineVault
@@ -933,6 +903,52 @@ localStorage.setItem(
   }
 }
 
+// ─────────────────────────────────────
+// LIST DRIVE DOCUMENTS (paginated, optional incremental filter)
+// ─────────────────────────────────────
+
+async listDriveDocuments(
+  folderId: string,
+  sinceIso?: string
+): Promise<{ data: any[] | null; error: any }> {
+
+  try {
+
+    let query =
+      `'${folderId}' in parents and trashed=false`;
+
+    if (sinceIso) {
+      query += ` and modifiedTime > '${sinceIso}'`;
+    }
+
+    const allFiles: any[] = [];
+    let pageToken: string | undefined;
+
+    do {
+
+      const result =
+        await this.driveService.listFiles(query, pageToken);
+
+      allFiles.push(...(result.files ?? []));
+
+      pageToken = result.nextPageToken;
+
+    } while (pageToken);
+
+    return { data: allFiles, error: null };
+
+  } catch (e) {
+
+    if (e instanceof DriveOfflineError) {
+      return { data: null, error: e };
+    }
+
+    console.error('❌ listDriveDocuments failed', e);
+    return { data: null, error: e };
+
+  }
+}
+
   // ── Offline load ───────────────────────────────────────────────────────────
 
   async loadOfflineDocuments() {
@@ -978,9 +994,10 @@ await Promise.all(
       try {
 
         const fileName =
-          doc.file_url
-            ?.split('/')
-            ?.pop();
+          doc.local_file_name
+            || doc.file_url
+              ?.split('/')
+              ?.pop();
 
         if (!fileName) {
           return;
@@ -1342,13 +1359,21 @@ async viewDoc(
   try {
 
     // ───────────────────────────────
-    // ENSURE LOCAL CACHE
+    // ENSURE LOCAL CACHE (with progress)
     // ───────────────────────────────
+
+    doc.isDownloading = true;
+    doc.downloadProgress = 0;
 
     const ready =
       await this.ensureLocalFile(
-        doc
+        doc,
+        (percent) => {
+          doc.downloadProgress = percent;
+        }
       );
+
+    doc.isDownloading = false;
 
     if (!ready) {
 
@@ -1504,6 +1529,8 @@ if (isPdf) {
 
   } catch (e) {
 
+    doc.isDownloading = false;
+
     console.error(
       '❌ View error',
       e
@@ -1570,13 +1597,21 @@ async downloadDoc(
   try {
 
     // ───────────────────────────────
-    // ENSURE LOCAL CACHE
+    // ENSURE LOCAL CACHE (with progress)
     // ───────────────────────────────
+
+    doc.isDownloading = true;
+    doc.downloadProgress = 0;
 
     const ready =
       await this.ensureLocalFile(
-        doc
+        doc,
+        (percent) => {
+          doc.downloadProgress = percent;
+        }
       );
+
+    doc.isDownloading = false;
 
     if (!ready) {
 
@@ -1664,6 +1699,8 @@ if (!isMobile) {
     );
 
   } catch (e) {
+
+    doc.isDownloading = false;
 
     console.error(
       '❌ Download error',
@@ -1949,18 +1986,27 @@ private async blobToBase64String(
       // Always remove from Dexie first (works offline too)
       await this.offlineVault.documents.delete(doc.id);
 
-      // Only call Supabase if the doc was synced to the server and we are online
-      if (!doc.local_only && navigator.onLine) {
-let path =
-  doc.file_url;
-          if (path.includes('http')) {
-          path = path.split('/documents/')[1];
-        }
-        await this.supabaseService.deleteFile(path);
-        // Use server_id if available, otherwise fall back to the server-assigned id on the doc
-        const serverId = doc.server_id || (doc as any).id;
-        if (serverId) {
-          await this.supabaseService.deleteRecord(serverId);
+      const serverId = doc.server_id || (doc as any).id;
+
+      if (!doc.local_only && serverId) {
+
+        if (navigator.onLine) {
+
+          try {
+            await this.driveService.deleteFile(serverId);
+          } catch (driveErr) {
+            // Drive delete failed (network blip, transient error) — queue it
+            // so the background sync worker (Phase 8) retries once online.
+            console.warn('⚠️ Live Drive delete failed, queuing for retry', driveErr);
+            await this.googleSyncService.queueDelete(serverId);
+          }
+
+        } else {
+
+          // Offline — queue the delete so it propagates once connectivity returns.
+          // Without this, a resync would re-download the "deleted" file from Drive
+          // since nothing ever told Drive to remove it.
+          await this.googleSyncService.queueDelete(serverId);
         }
       }
 
@@ -2049,125 +2095,14 @@ async processSyncQueue() {
 
   this.isQueueProcessing = true;
 
-  // ─────────────────────────────
-  // OFFLINE
-  // ─────────────────────────────
-try {
-  if (!navigator.onLine) {
+  try {
 
-    console.log(
-      '📴 Offline — sync queue skipped'
-    );
+    // Delegates to the app-wide sync worker (Phase 8) so the same
+    // drain logic runs whether triggered from this page, pull-to-refresh,
+    // or automatically on reconnect from anywhere in the app.
+    await this.googleSyncService.drainQueue();
 
-    this.isQueueProcessing = false;
-
-    return;
-  }
-
-    const jobs = await this.offlineVault.syncQueue
-      .where('status')
-      .equals('pending')
-      .toArray();
-
-    console.log(`📦 Pending jobs: ${jobs.length}`);
-
-    for (const job of jobs) {
-      if (job.type !== 'upload') continue;
-
-      try {
-        const doc = await this.offlineVault.documents.get(job.document_id);
-        if (!doc) {
-          console.warn('⚠️ Local doc missing for sync job', job.id);
-          continue;
-        }
-
-        // Upload page saves local docs with file_url = bare filename (e.g. 1234_doc.jpg.enc)
-        // readEncryptedFile adds "vault/" itself, so pass the bare filename
-        const localFileName = doc.local_file_name || doc.file_url.split('/').pop()!;
-        const encryptedText = await this.offlineVault.readEncryptedFile(localFileName);
-
-        if (!encryptedText) {
-          console.error('❌ Encrypted file missing on disk for', localFileName);
-          await this.offlineVault.syncQueue.update(job.id, { status: 'failed' });
-          continue;
-        }
-
-const encryptedFile =
-  new File(
-
-    [encryptedText],
-
-    // ✅ KEEP SAME LOCAL ENCRYPTED FILE NAME
-    localFileName,
-
-    {
-      type: 'text/plain'
-    }
-  );
-        const filePath = await this.supabaseService.uploadFile(encryptedFile);
-
-        const { data, error } = await this.supabaseService.saveRecord({
-          member_id:   doc.member_id,
-          category_id: doc.category_id,
-          type_id:     doc.type_id,
-          file_url:    filePath,
-          file_type:   doc.file_type,
-          created_at:  doc.created_at || new Date().toISOString(),
-        });
-
-        if (error) {
-          console.error('❌ saveRecord failed', error);
-          await this.offlineVault.syncQueue.update(job.id, { status: 'failed' });
-          continue;
-        }
-
-        // Mark local doc as synced
-await this.offlineVault.documents.update(
-  job.document_id,
-  {
-
-    // ✅ KEEP EXISTING LOCAL FILE
-    local_path:
-      doc.local_path,
-
-    local_file_name: doc.local_file_name,
-
-    thumbnail_path:
-      doc.thumbnail_path,
-
-    original_name:
-      doc.original_name,
-
-    // ✅ UPDATE SERVER VALUES
-    server_id:
-      (data as any)?.id ?? null,
-
-    file_url:
-      filePath,
-
-    synced: true,
-
-    sync_pending: false,
-
-    sync_failed: false,
-
-    local_only: false
-  }
-);
-
-        await this.offlineVault.syncQueue.update(job.id, { status: 'completed' });
-
-        // Ensure the next loadDocuments pull gets fresh server data
-        localStorage.setItem('force_sync', 'true');
-
-        console.log('✅ Sync queue job done for', doc.original_name);
-      } catch (e) {
-        console.error('❌ Sync queue job failed for job', job.id, e);
-        await this.offlineVault.syncQueue.update(job.id, { status: 'failed' });
-      }
-    }
-  }
-   catch (e) {
+  } catch (e) {
 
     console.error(
       '❌ Queue processing failed',
@@ -2176,7 +2111,6 @@ await this.offlineVault.documents.update(
 
   } finally {
 
-    // ✅ ALWAYS RESET
     this.isQueueProcessing = false;
   }
     // await this.loadOfflineDocuments();
@@ -2209,7 +2143,8 @@ await this.offlineVault.documents.update(
 // ─────────────────────────────────────
 
 async ensureLocalFile(
-  doc: any
+  doc: any,
+  onProgress?: (percent: number) => void
 ): Promise<boolean> {
 
   try {
@@ -2250,29 +2185,19 @@ async ensureLocalFile(
     );
 
     // ─────────────────────────────────
-    // GET SIGNED URL
+    // DOWNLOAD FROM DRIVE
     // ─────────────────────────────────
 
-    const signedUrl =
-      await this.supabaseService
-        .getSignedUrl(doc.file_url);
-
-    if (!signedUrl) {
-
+    if (!doc.server_id) {
       return false;
     }
 
-    // ─────────────────────────────────
-    // DOWNLOAD ENCRYPTED FILE
-    // ─────────────────────────────────
-
-    const res =
-      await fetch(
-        signedUrl
-      );
+    const blob =
+      await this.driveService
+        .downloadMedia(doc.server_id, onProgress);
 
     const encryptedText =
-      await res.text();
+      await blob.text();
 
     // ─────────────────────────────────
     // SAVE LOCAL FILE

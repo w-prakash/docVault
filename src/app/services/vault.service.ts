@@ -5,6 +5,7 @@ import { VaultUnlockComponent } from '../components/vault-unlock/vault-unlock.co
 // import { SupabaseService } from './supabase.service';
 import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
 import { Preferences } from '@capacitor/preferences';
+import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 @Injectable({ providedIn: 'root' })
 export class VaultService {
 
@@ -402,6 +403,16 @@ clearKey() {
   this.emitLockState(true);
 }
 
+/** Explicit user-triggered lock (e.g. a "Lock Vault" button in Settings). Same effect as auto-lock, named separately so call sites read clearly. */
+lockVault(): void {
+  console.log('🔒 Vault locked manually');
+  this.clearKey();
+}
+
+get isLocked(): boolean {
+  return !this.vaultKey;
+}
+
 // async tryBiometricUnlock(): Promise<boolean> {
 //   try {
 //     // 🔍 Check availability
@@ -492,6 +503,9 @@ private emitLockState(
 
 // =====================================
 // SAVE LOCAL VAULT META
+// (Keychain on iOS / Keystore-backed EncryptedSharedPreferences on Android —
+// not plain @capacitor/preferences, since this is the salt + encrypted
+// check value that gates the vault encryption key)
 // =====================================
 
 async saveVaultMeta(
@@ -499,32 +513,18 @@ async saveVaultMeta(
   vaultCheck: string
 ) {
 
-  console.log(
-    '💾 SAVING VAULT META'
-  );
-
-  console.log(
-    'SALT:',
-    salt
-  );
-
-  console.log(
-    'CHECK:',
-    vaultCheck
-  );
-
-  await Preferences.set({
+  await SecureStoragePlugin.set({
     key: 'vault_salt',
     value: salt
   });
 
-  await Preferences.set({
+  await SecureStoragePlugin.set({
     key: 'vault_check',
     value: vaultCheck
   });
 
   console.log(
-    '✅ VAULT META SAVED'
+    '✅ VAULT META SAVED (secure storage)'
   );
 }
 
@@ -534,31 +534,61 @@ async saveVaultMeta(
 
 async getLocalVaultMeta() {
 
-  const salt =
-    await Preferences.get({
-      key: 'vault_salt'
-    });
+  const salt = await this.secureGet('vault_salt');
+  const vaultCheck = await this.secureGet('vault_check');
 
-  const vaultCheck =
-    await Preferences.get({
-      key: 'vault_check'
-    });
+  if (salt && vaultCheck) {
 
-  console.log(
-    '📦 LOCAL SALT',
-    salt.value
-  );
+    return {
+      salt,
+      vault_check: vaultCheck
+    };
+  }
 
-  console.log(
-    '📦 LOCAL CHECK',
-    vaultCheck.value
-  );
+  // ─────────────────────────────
+  // ONE-TIME MIGRATION
+  // Earlier builds stored this in plain @capacitor/preferences.
+  // If secure storage is empty but the old location has data,
+  // migrate it rather than locking existing users out of their vault.
+  // ─────────────────────────────
+
+  const legacySalt = await Preferences.get({ key: 'vault_salt' });
+  const legacyCheck = await Preferences.get({ key: 'vault_check' });
+
+  if (legacySalt.value && legacyCheck.value) {
+
+    console.log('🔁 Migrating vault meta to secure storage');
+
+    await this.saveVaultMeta(legacySalt.value, legacyCheck.value);
+
+    await Preferences.remove({ key: 'vault_salt' });
+    await Preferences.remove({ key: 'vault_check' });
+
+    return {
+      salt: legacySalt.value,
+      vault_check: legacyCheck.value
+    };
+  }
 
   return {
-    salt: salt.value,
-    vault_check:
-      vaultCheck.value
+    salt: undefined,
+    vault_check: undefined
   };
+}
+
+/** SecureStoragePlugin throws on a missing key rather than returning null — normalize that. */
+private async secureGet(key: string): Promise<string | undefined> {
+
+  try {
+
+    const result = await SecureStoragePlugin.get({ key });
+    return result.value;
+
+  } catch {
+
+    return undefined;
+
+  }
 }
 
 // =====================================

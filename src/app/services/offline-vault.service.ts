@@ -348,5 +348,205 @@ async addToSyncQueue(
         new Date().toISOString()
     });
 }
+// =====================================
+// GET PENDING SYNC JOBS
+// =====================================
+
+async getPendingSyncJobs(): Promise<any[]> {
+
+  return await this.syncQueue
+    .where('status')
+    .equals('pending')
+    .toArray();
+}
+
+// =====================================
+// MARK SYNC JOB DONE
+// =====================================
+
+async markSyncJobDone(
+  id: number
+): Promise<void> {
+
+  await this.syncQueue
+    .delete(id);
+}
+
+// =====================================
+// MARK SYNC JOB FAILED
+// =====================================
+
+async markSyncJobFailed(
+  id: number
+): Promise<void> {
+
+  const job =
+    await this.syncQueue
+      .get(id);
+
+  if (!job) {
+    return;
+  }
+
+  const retryCount =
+    (job.retry_count ?? 0) + 1;
+
+  await this.syncQueue
+    .update(id, {
+
+      status:
+        retryCount >= 5
+          ? 'failed'
+          : 'pending',
+
+      retry_count:
+        retryCount
+    });
+}
+
+// =====================================
+// STORAGE USED (Phase 10)
+// =====================================
+
+async getLocalStorageUsage(): Promise<{
+  documentCount: number;
+  cachedFileCount: number;
+  totalBytes: number;
+}> {
+
+  const documentCount =
+    await this.documents.count();
+
+  let cachedFileCount = 0;
+  let totalBytes = 0;
+
+  for (const dir of ['vault', 'thumbnails']) {
+
+    try {
+
+      const result =
+        await Filesystem.readdir({
+          path: dir,
+          directory: Directory.Data
+        });
+
+      for (const file of result.files) {
+
+        if (file.type === 'file') {
+          cachedFileCount++;
+          totalBytes += file.size ?? 0;
+        }
+      }
+
+    } catch {
+      // directory doesn't exist yet - nothing cached, that's fine
+    }
+  }
+
+  return {
+    documentCount,
+    cachedFileCount,
+    totalBytes
+  };
+}
+
+// =====================================
+// CLEAR CACHE (Phase 10)
+// Removes locally cached encrypted files + thumbnails to free device
+// storage. Document metadata is kept and marked as not-locally-cached,
+// so the next view/download re-fetches from Drive - nothing on Drive
+// is touched or lost.
+// =====================================
+
+async clearLocalFileCache(): Promise<void> {
+
+  for (const dir of ['vault', 'thumbnails']) {
+
+    try {
+
+      const result =
+        await Filesystem.readdir({
+          path: dir,
+          directory: Directory.Data
+        });
+
+      for (const file of result.files) {
+
+        if (file.type === 'file') {
+
+          await Filesystem.deleteFile({
+            path: `${dir}/${file.name}`,
+            directory: Directory.Data
+          });
+        }
+      }
+
+    } catch {
+      // nothing cached in this dir - fine
+    }
+  }
+
+  const allDocs = await this.documents.toArray();
+
+  for (const doc of allDocs) {
+
+    if (doc.local_only) {
+      // never uploaded - clearing cache would destroy the only copy, skip it
+      continue;
+    }
+
+    await this.documents.update(doc.id, {
+      local_path: null,
+      thumbnail_path: null
+    });
+  }
+
+  console.log('Local file cache cleared');
+}
+
+// =====================================
+// RESET ALL LOCAL DATA (Phase 10 - Reset Vault)
+// Wipes every local table. Does NOT touch Google Drive - files already
+// uploaded remain there. This is the local-device side of a vault reset;
+// the caller is also responsible for clearing the vault salt/check from
+// secure storage and the cached DocVault folder id.
+// =====================================
+
+async resetAllLocalData(): Promise<void> {
+
+  await this.members.clear();
+  await this.categories.clear();
+  await this.types.clear();
+  await this.documents.clear();
+  await this.syncQueue.clear();
+
+  for (const dir of ['vault', 'thumbnails']) {
+
+    try {
+
+      const result =
+        await Filesystem.readdir({
+          path: dir,
+          directory: Directory.Data
+        });
+
+      for (const file of result.files) {
+
+        if (file.type === 'file') {
+
+          await Filesystem.deleteFile({
+            path: `${dir}/${file.name}`,
+            directory: Directory.Data
+          });
+        }
+      }
+
+    } catch {
+      // nothing there - fine
+    }
+  }
+
+  console.log('All local data wiped');
+}
 
 }

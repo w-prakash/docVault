@@ -1,0 +1,226 @@
+/* =========================================
+   SPLASH BACKGROUND
+========================================= */
+
+.splash-bg {
+
+  --background:
+    radial-gradient(
+      circle at top,
+      #172554,
+      #020617
+    );
+
+  overflow: hidden;
+}
+
+/* =========================================
+   GLOW
+========================================= */
+
+.splash-glow {
+
+  position: absolute;
+
+  top: -120px;
+  right: -100px;
+
+  width: 320px;
+  height: 320px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(59,130,246,0.35),
+      transparent 70%
+    );
+
+  filter: blur(30px);
+}
+
+/* =========================================
+   CONTAINER
+========================================= */
+
+.splash-container {
+
+  height: 100%;
+
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+  align-items: center;
+
+  padding: 24px;
+
+  text-align: center;
+}
+
+/* =========================================
+   LOGO RING
+========================================= */
+
+.logo-ring {
+
+  width: 150px;
+  height: 150px;
+
+  border-radius: 50%;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  background:
+    rgba(59,130,246,0.08);
+
+  border:
+    2px solid rgba(59,130,246,0.28);
+
+  animation:
+    pulseRing 2s infinite;
+}
+
+/* INNER */
+
+.logo-inner {
+
+  width: 110px;
+  height: 110px;
+
+  border-radius: 50%;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  background:
+    linear-gradient(
+      135deg,
+      #3b82f6,
+      #2563eb
+    );
+
+  box-shadow:
+    0 0 40px rgba(59,130,246,0.45);
+}
+
+/* ICON */
+
+.logo-inner ion-icon {
+
+  font-size: 58px;
+
+  color: white;
+}
+
+/* =========================================
+   TITLE
+========================================= */
+
+h1 {
+
+  margin-top: 34px;
+
+  color: white;
+
+  font-size: 40px;
+
+  font-weight: 800;
+
+  letter-spacing: -1px;
+}
+
+p {
+
+  margin-top: 10px;
+
+  color:
+    rgba(255,255,255,0.65);
+
+  font-size: 15px;
+}
+
+/* =========================================
+   LOADER
+========================================= */
+
+.loader {
+
+  width: 180px;
+  height: 6px;
+
+  margin-top: 42px;
+
+  border-radius: 999px;
+
+  overflow: hidden;
+
+  background:
+    rgba(255,255,255,0.08);
+}
+
+.loader-bar {
+
+  width: 40%;
+
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #60a5fa,
+      #2563eb
+    );
+
+  animation:
+    loaderAnim 1.5s infinite;
+}
+
+/* =========================================
+   ANIMATIONS
+========================================= */
+
+@keyframes pulseRing {
+
+  0% {
+
+    transform: scale(1);
+
+    box-shadow:
+      0 0 0 rgba(59,130,246,0);
+  }
+
+  50% {
+
+    transform: scale(1.05);
+
+    box-shadow:
+      0 0 45px rgba(59,130,246,0.22);
+  }
+
+  100% {
+
+    transform: scale(1);
+
+    box-shadow:
+      0 0 0 rgba(59,130,246,0);
+  }
+}
+
+@keyframes loaderAnim {
+
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(350%);
+  }
+}
