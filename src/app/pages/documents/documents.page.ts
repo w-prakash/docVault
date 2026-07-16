@@ -17,7 +17,7 @@ import { NotificationService } from 'src/app/services/notification.service';
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.js';
 import { VaultService } from '../../services/vault.service';
 import { OfflineVaultService } from 'src/app/services/offline-vault.service';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { SyncStatusService } from 'src/app/services/sync-status';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -127,6 +127,7 @@ private isQueueProcessing = false;
     private alertCtrl: AlertController,
     private location: Location,
     private router: Router,
+    private route: ActivatedRoute,
     private syncStatus: SyncStatusService,
     private vaultService: VaultService,
     private toastCtrl: ToastController,
@@ -178,6 +179,14 @@ await this.loadMasterData();
 
   async ionViewWillEnter() {
     await this.loadDocuments();
+
+    // Deep-link support — e.g. Dashboard's "ID Cards" tile links here
+    // pre-filtered to the Identity category instead of being a separate page.
+    const categoryParam = this.route.snapshot.queryParamMap.get('category');
+
+    if (categoryParam) {
+      this.selectCategory(categoryParam);
+    }
   }
 
 

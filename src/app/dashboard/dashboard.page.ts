@@ -157,6 +157,14 @@ export class DashboardPage implements OnInit, OnDestroy {
     this.router.navigateByUrl('/documents');
   }
 
+  goToReports() {
+    this.router.navigateByUrl('/reports');
+  }
+
+  goToIdCards() {
+    this.router.navigate(['/documents'], { queryParams: { category: 'Identity' } });
+  }
+
   goToVault() {
     this.router.navigateByUrl('/documents');
   }

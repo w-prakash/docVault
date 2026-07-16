@@ -74,6 +74,23 @@ export class GoogleDriveService {
     return this.delete(`/files/${fileId}`);
   }
 
+  /**
+   * Google's storage quota is per-account (shared across Gmail/Photos/Drive),
+   * not per-app-folder — there's no API for "how much of MY quota does
+   * DocVault's folder use." Callers should label this as account storage,
+   * not DocVault-specific storage.
+   */
+  getAbout(): Promise<{
+    storageQuota?: {
+      limit?: string;
+      usage?: string;
+      usageInDrive?: string;
+      usageInDriveTrash?: string;
+    };
+  }> {
+    return this.get('/about', { fields: 'storageQuota' });
+  }
+
   uploadMultipart(
     file: Blob,
     metadata: DriveUploadMetadata,
