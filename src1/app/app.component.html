@@ -1,0 +1,212 @@
+<!-- app.component.html -->
+
+<ion-app>
+
+  <!-- SIDE MENU -->
+
+  <ion-menu
+    side="start"
+    menuId="main-menu"
+    contentId="main-content">
+
+    <ion-content class="menu-content">
+
+      <!-- HEADER -->
+
+      <div class="menu-header">
+
+        <div class="logo-ring">
+
+          <ion-icon
+            name="shield-checkmark">
+          </ion-icon>
+
+        </div>
+
+        <h2>
+          DocVault
+        </h2>
+
+        <p>
+          Secure encrypted storage
+        </p>
+
+      </div>
+
+      <!-- MENU ITEMS -->
+
+<ion-list lines="none">
+
+  <!-- DASHBOARD -->
+
+  <ion-menu-toggle auto-hide="false">
+
+    <ion-item
+      routerLink="/dashboard"
+      routerDirection="root">
+
+      <ion-icon
+        name="grid-outline"
+        slot="start">
+      </ion-icon>
+
+      <ion-label>
+        Dashboard
+      </ion-label>
+
+    </ion-item>
+
+  </ion-menu-toggle>
+
+  <!-- DOCUMENTS -->
+
+  <ion-menu-toggle auto-hide="false">
+
+    <ion-item
+      routerLink="/documents"
+      routerDirection="root">
+
+      <ion-icon
+        name="document-text-outline"
+        slot="start">
+      </ion-icon>
+
+      <ion-label>
+        Documents
+      </ion-label>
+
+    </ion-item>
+
+  </ion-menu-toggle>
+
+  <!-- UPLOAD -->
+
+  <ion-menu-toggle auto-hide="false">
+
+    <ion-item
+      routerLink="/upload"
+      routerDirection="root">
+
+      <ion-icon
+        name="cloud-upload-outline"
+        slot="start">
+      </ion-icon>
+
+      <ion-label>
+        Upload
+      </ion-label>
+
+    </ion-item>
+
+  </ion-menu-toggle>
+
+  <!-- SETTINGS -->
+
+  <ion-menu-toggle auto-hide="false">
+
+    <ion-item
+      routerLink="/settings"
+      routerDirection="root">
+
+      <ion-icon
+        name="settings-outline"
+        slot="start">
+      </ion-icon>
+
+      <ion-label>
+        Settings
+      </ion-label>
+
+    </ion-item>
+
+  </ion-menu-toggle>
+
+</ion-list>
+
+      <!-- FOOTER -->
+
+      <div class="menu-footer">
+
+        <div class="version">
+          Version 1.0.0
+        </div>
+
+<ion-button
+  expand="block"
+  color="danger"
+  menuClose
+  (click)="logout()">
+
+  <ion-icon
+    slot="start"
+    name="log-out-outline">
+  </ion-icon>
+
+  Logout
+
+</ion-button>
+
+      </div>
+
+    </ion-content>
+
+  </ion-menu>
+
+  <!-- MAIN CONTENT -->
+
+<ion-router-outlet
+  id="main-content">
+</ion-router-outlet>
+
+</ion-app>
+
+<!-- VAULT LOCK SCREEN -->
+
+<div
+  class="vault-lock-screen"
+  *ngIf="showVaultLock">
+
+  <div class="vault-lock-box">
+
+    <div class="vault-ring">
+
+      <ion-icon
+        name="lock-closed">
+      </ion-icon>
+
+    </div>
+
+    <h2>
+      Vault Locked
+    </h2>
+
+    <p>
+      Your encrypted vault
+      is now secured
+    </p>
+
+  </div>
+
+</div>
+
+<div
+  class="vault-loading"
+  *ngIf="vaultService.isUnlocking">
+
+  <div class="vault-loading-box">
+
+    <div class="vault-loader-ring">
+
+      <ion-icon
+        name="shield-checkmark">
+      </ion-icon>
+
+    </div>
+
+    <p>
+      Unlocking Vault...
+    </p>
+
+  </div>
+
+</div>

@@ -8,6 +8,7 @@ import { GoogleAuthService } from 'src/app/core/google/auth/google-auth.service'
 import { VaultService } from 'src/app/services/vault.service';
 import { OfflineVaultService } from 'src/app/services/offline-vault.service';
 import { DocVaultFolderService } from 'src/app/core/google/drive/docvault-folder.service';
+import { NotificationService } from 'src/app/services/notification.service';
 
 
 @Component({
@@ -33,7 +34,8 @@ export class SettingsPage implements OnInit {
     private docVaultFolderService: DocVaultFolderService,
     private router: Router,
     private alertCtrl: AlertController,
-    private toastCtrl: ToastController
+    private toastCtrl: ToastController,
+    private notificationService: NotificationService
   ) {}
 
   ngOnInit() {
@@ -55,6 +57,8 @@ export class SettingsPage implements OnInit {
       this.documentCount = usage.documentCount;
       this.cachedFileCount = usage.cachedFileCount;
       this.storageLabel = this.formatBytes(usage.totalBytes);
+
+      await this.checkStorageQuota();
 
     } catch (e) {
 
@@ -78,6 +82,32 @@ export class SettingsPage implements OnInit {
     }
 
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  /** Uses the real browser/device Storage API — no synthetic numbers — to warn before the device runs out of room. */
+  private async checkStorageQuota() {
+
+    try {
+
+      if (!navigator.storage?.estimate) {
+        return;
+      }
+
+      const { usage, quota } = await navigator.storage.estimate();
+
+      if (!usage || !quota) {
+        return;
+      }
+
+      const percentUsed = Math.round((usage / quota) * 100);
+
+      if (percentUsed >= 90) {
+        await this.notificationService.storageAlmostFull(percentUsed);
+      }
+
+    } catch (e) {
+      console.warn('⚠️ Storage quota check unavailable', e);
+    }
   }
 
   // =====================================
@@ -110,6 +140,8 @@ export class SettingsPage implements OnInit {
 
     await this.googleAuthService.signOut();
 
+    await this.notificationService.authLogout();
+
     this.router.navigateByUrl('/login', { replaceUrl: true });
   }
 
@@ -131,6 +163,7 @@ export class SettingsPage implements OnInit {
             this.vaultService.lockVault();
 
             await this.googleAuthService.signOut();
+            await this.notificationService.authLogout();
 
             this.router.navigateByUrl('/login', { replaceUrl: true });
           }
@@ -171,6 +204,7 @@ export class SettingsPage implements OnInit {
       await this.offlineVault.clearLocalFileCache();
 
       await this.showToast('Cache cleared');
+      await this.notificationService.storageCacheCleared();
 
       await this.loadStorageUsage();
 

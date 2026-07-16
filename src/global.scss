@@ -350,3 +350,26 @@ ion-action-sheet {
   color:
     rgba(255,255,255,0.72) !important;
 }
+/* ============================================================
+   NOTIFICATION CENTER MODAL
+   Slides in from the right like a panel, matching the DocVault
+   dark glassmorphism theme used across the rest of the app.
+============================================================ */
+
+.notification-center-modal {
+  --width: min(420px, 100%);
+  --height: 100%;
+  --border-radius: 0;
+  align-items: stretch;
+  justify-content: flex-end;
+
+  &::part(content) {
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+@media (max-width: 480px) {
+  .notification-center-modal {
+    --width: 100%;
+  }
+}

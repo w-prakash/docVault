@@ -4,6 +4,7 @@ import { Preferences } from '@capacitor/preferences';
 import { GoogleSessionService } from '../session/google-session.service';
 import { GoogleUser } from './google-auth.models';
 import { googleOAuthConfig } from './google-oauth.config';
+import { NotificationService } from '../../../services/notification.service';
 
 const REFRESH_TOKEN_KEY = 'google_auth_refresh_token';
 
@@ -16,7 +17,8 @@ export class GoogleAuthService {
   lastError: string | null = null;
 
   constructor(
-    private readonly sessionService: GoogleSessionService
+    private readonly sessionService: GoogleSessionService,
+    private readonly notificationService: NotificationService
   ) {}
 
   // =====================================
@@ -102,6 +104,7 @@ export class GoogleAuthService {
 
     if (!refreshToken) {
       console.warn('No refresh token stored — user must sign in again');
+      this.notificationService.authSessionExpired();
       return null;
     }
 
@@ -131,6 +134,7 @@ export class GoogleAuthService {
 
       console.error('❌ Token refresh failed:', err);
       this.lastError = 'Session expired — please sign in again';
+      this.notificationService.authSessionExpired();
       return null;
 
     }

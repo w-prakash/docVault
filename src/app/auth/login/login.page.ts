@@ -6,6 +6,7 @@ import { Capacitor } from '@capacitor/core';
 import { GoogleAuthService } from 'src/app/core/google/auth/google-auth.service';
 import { VaultService } from 'src/app/services/vault.service';
 import { DocVaultFolderService } from 'src/app/core/google/drive/docvault-folder.service';
+import { NotificationService } from 'src/app/services/notification.service';
 
 @Component({
   selector: 'app-login',
@@ -26,7 +27,8 @@ export class LoginPage {
     private router: Router,
     private googleAuthService: GoogleAuthService,
     private vaultService: VaultService,
-    private docVaultFolderService: DocVaultFolderService
+    private docVaultFolderService: DocVaultFolderService,
+    private notificationService: NotificationService
   ) {}
 
   ngOnInit() {
@@ -47,6 +49,8 @@ export class LoginPage {
       // 🔐 provision the local vault on first login (no-op if it already exists)
       await this.vaultService.ensureVault();
       await this.docVaultFolderService.ensureDocVaultFolder();
+
+      await this.notificationService.authLoginSuccess(user.email);
 
       await this.router.navigateByUrl('/dashboard', { replaceUrl: true });
 

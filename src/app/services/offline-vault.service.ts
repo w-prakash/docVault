@@ -25,6 +25,8 @@ extends Dexie {
 
   syncQueue!: Table<any, number>;
 
+  notifications!: Table<any, number>;
+
   constructor() {
 
     super('docvault');
@@ -48,9 +50,68 @@ syncQueue:
 '++id,type,status,document_id,created_at'
     });
 
+    // v6: add local notifications table (Notification Center — Phase 11)
+    this.version(6).stores({
+
+      members:
+        'id,name',
+
+      categories:
+        'id,name',
+
+      types:
+        'id,category_id,name',
+
+documents:
+'++id,server_id,file_url,original_name,member_id,category_id,type_id,synced,sync_pending,sync_failed,local_only,created_at',
+syncQueue:
+'++id,type,status,document_id,created_at',
+notifications:
+'++id,type,category,timestamp'
+    });
+
     console.log(
       '✅ OfflineVault initialized'
     );
+  }
+
+  // =====================================
+  // NOTIFICATIONS (Phase 11)
+  // =====================================
+
+  async addNotification(notification: any): Promise<number> {
+    return await this.notifications.add(notification);
+  }
+
+  async getNotifications(): Promise<any[]> {
+    return await this.notifications
+      .orderBy('timestamp')
+      .reverse()
+      .toArray();
+  }
+
+  async updateNotification(id: number, changes: any): Promise<void> {
+    await this.notifications.update(id, changes);
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    await this.notifications.delete(id);
+  }
+
+  async clearAllNotifications(): Promise<void> {
+    await this.notifications.clear();
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    await this.notifications
+      .filter((n: any) => !n.read)
+      .modify({ read: true });
+  }
+
+  async getUnreadNotificationCount(): Promise<number> {
+    return await this.notifications
+      .filter((n: any) => !n.read)
+      .count();
   }
 
   // =====================================

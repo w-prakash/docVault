@@ -4,6 +4,7 @@ import { OfflineVaultService } from '../../../services/offline-vault.service';
 import { GoogleDriveService } from '../drive/google-drive.service';
 import { DocVaultFolderService } from '../drive/docvault-folder.service';
 import { DriveOfflineError } from '../drive/google-drive.models';
+import { NotificationService } from '../../../services/notification.service';
 
 /**
  * App-wide background sync worker. Unlike the per-page sync logic in
@@ -31,7 +32,8 @@ export class GoogleSyncService {
   constructor(
     private readonly offlineVault: OfflineVaultService,
     private readonly driveService: GoogleDriveService,
-    private readonly folderService: DocVaultFolderService
+    private readonly folderService: DocVaultFolderService,
+    private readonly notificationService: NotificationService
   ) {}
 
   /** Call once, app-wide (e.g. from AppComponent.ngOnInit), to auto-drain the queue whenever connectivity returns. */
@@ -88,6 +90,8 @@ export class GoogleSyncService {
 
       console.log(`📦 Pending jobs: ${jobs.length}`);
 
+      let completedCount = 0;
+
       for (const job of jobs) {
 
         try {
@@ -101,6 +105,7 @@ export class GoogleSyncService {
           }
 
           await this.offlineVault.markSyncJobDone(job.id);
+          completedCount++;
 
         } catch (err) {
 
@@ -113,6 +118,10 @@ export class GoogleSyncService {
           await this.offlineVault.markSyncJobFailed(job.id);
 
         }
+      }
+
+      if (completedCount > 0) {
+        await this.notificationService.syncBackgroundCompleted(completedCount);
       }
 
       localStorage.setItem('force_sync', 'true');

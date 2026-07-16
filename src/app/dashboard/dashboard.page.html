@@ -7,9 +7,9 @@
     <ion-title>Dashboard</ion-title>
 
     <ion-buttons slot="end">
-      <ion-button (click)="comingSoon('Notifications')" class="bell-btn">
+      <ion-button (click)="openNotifications()" class="bell-btn">
         <ion-icon name="notifications-outline" slot="icon-only"></ion-icon>
-        <span class="bell-dot"></span>
+        <span class="bell-dot" *ngIf="unreadNotifications > 0">{{ unreadNotifications > 9 ? '9+' : unreadNotifications }}</span>
       </ion-button>
     </ion-buttons>
   </ion-toolbar>

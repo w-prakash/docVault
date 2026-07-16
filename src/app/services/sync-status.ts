@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import {
   BehaviorSubject
 } from 'rxjs';
+import { NotificationService } from './notification.service';
 
 @Injectable({
   providedIn: 'root'
@@ -61,7 +62,7 @@ export class SyncStatusService {
     this.lastSyncSubject
       .asObservable();
 
-  constructor() {
+  constructor(private notificationService: NotificationService) {
 
     // 🌐 online
     window.addEventListener(
@@ -74,6 +75,8 @@ export class SyncStatusService {
 
         this.onlineSubject
           .next(true);
+
+        this.notificationService.networkOnline();
       }
     );
 
@@ -88,6 +91,8 @@ export class SyncStatusService {
 
         this.onlineSubject
           .next(false);
+
+        this.notificationService.networkOffline();
       }
     );
   }

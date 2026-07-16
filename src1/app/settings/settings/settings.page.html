@@ -1,0 +1,86 @@
+<ion-header class="app-header">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Settings</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="app-bg">
+
+  <div class="page-container">
+
+    <!-- ACCOUNT -->
+    <div class="user-profile" *ngIf="userService.profile$ | async as profile">
+      <img *ngIf="profile.photoUrl" [src]="profile.photoUrl" class="user-avatar" alt="Profile">
+      <div *ngIf="!profile.photoUrl" class="user-avatar user-avatar-fallback">
+        {{ profile.displayName?.charAt(0) }}
+      </div>
+      <h3>{{ profile.displayName }}</h3>
+      <p>{{ profile.email }}</p>
+    </div>
+
+    <!-- STORAGE USED -->
+    <div class="glass-card settings-section">
+      <div class="section-title">Storage</div>
+
+      <div class="storage-row">
+        <div class="storage-stat">
+          <span class="storage-value">{{ isLoadingStorage ? '—' : documentCount }}</span>
+          <span class="storage-label">Documents</span>
+        </div>
+        <div class="storage-stat">
+          <span class="storage-value">{{ isLoadingStorage ? '—' : cachedFileCount }}</span>
+          <span class="storage-label">Cached Files</span>
+        </div>
+        <div class="storage-stat">
+          <span class="storage-value">{{ storageLabel }}</span>
+          <span class="storage-label">Used on device</span>
+        </div>
+      </div>
+
+      <ion-button
+        expand="block"
+        fill="outline"
+        [disabled]="isClearingCache"
+        (click)="clearCache()">
+        <ion-spinner *ngIf="isClearingCache" name="crescent" slot="start"></ion-spinner>
+        {{ isClearingCache ? 'Clearing…' : 'Clear Local Cache' }}
+      </ion-button>
+    </div>
+
+    <!-- ACCOUNT ACTIONS -->
+    <div class="glass-card settings-section">
+      <div class="section-title">Account</div>
+
+      <ion-item button lines="none" class="settings-item" (click)="switchAccount()">
+        <ion-icon name="swap-horizontal-outline" slot="start"></ion-icon>
+        <ion-label>Switch Account</ion-label>
+      </ion-item>
+
+      <ion-item button lines="none" class="settings-item" (click)="logout()">
+        <ion-icon name="log-out-outline" slot="start"></ion-icon>
+        <ion-label>Log Out</ion-label>
+      </ion-item>
+    </div>
+
+    <!-- DANGER ZONE -->
+    <div class="glass-card settings-section danger-zone">
+      <div class="section-title danger-title">Danger Zone</div>
+
+      <p class="danger-copy">
+        Resetting erases your vault password and all locally cached files on this
+        device. Documents already uploaded to Google Drive are not deleted, but you
+        will need your current password to decrypt them again.
+      </p>
+
+      <ion-item button lines="none" class="settings-item danger-action" (click)="resetVault()">
+        <ion-icon name="warning-outline" slot="start"></ion-icon>
+        <ion-label>Reset Vault</ion-label>
+      </ion-item>
+    </div>
+
+  </div>
+
+</ion-content>

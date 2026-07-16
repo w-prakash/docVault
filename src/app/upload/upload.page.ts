@@ -16,6 +16,7 @@ import {
   DomSanitizer
 } from '@angular/platform-browser';
 import { OfflineVaultService } from '../services/offline-vault.service';
+import { NotificationService } from '../services/notification.service';
 import * as pdfjsLib from 'pdfjs-dist';
 (pdfjsLib as any)
   .GlobalWorkerOptions
@@ -63,7 +64,8 @@ uploadMessage = '';
     OfflineVaultService,
     private driveService: GoogleDriveService,
     private folderService: DocVaultFolderService,
-    private referenceDataService: ReferenceDataService
+    private referenceDataService: ReferenceDataService,
+    private notificationService: NotificationService
 
   ) {
       console.log(
@@ -667,6 +669,8 @@ if (!navigator.onLine) {
         this.uploadMessage =
           `Uploading ${file.name}`;
 
+        this.notificationService.driveUploadStarted(file.name);
+
         this.uploadProgress =
           startProgress + 45;
 
@@ -718,6 +722,8 @@ if (!navigator.onLine) {
         await this.offlineVault
           .markSyncJobDone(syncJobId);
 
+        this.notificationService.driveUploadCompleted(file.name);
+
         // ✅ file completed
         this.uploadProgress =
           endProgress;
@@ -737,6 +743,7 @@ if (!navigator.onLine) {
             console.log('📴 Went offline mid-upload — left queued for background sync');
           } else if (syncJobId !== undefined) {
             await this.offlineVault.markSyncJobFailed(syncJobId);
+            await this.notificationService.driveUploadFailed(file.name);
           }
 
         } catch (queueError) {

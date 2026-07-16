@@ -13,6 +13,7 @@ import { Location } from '@angular/common';
 import { AlertController } from '@ionic/angular';
 import { ToastController } from '@ionic/angular';
 import { decryptData } from 'src/app/utils/encryption.util';
+import { NotificationService } from 'src/app/services/notification.service';
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.js';
 import { VaultService } from '../../services/vault.service';
 import { OfflineVaultService } from 'src/app/services/offline-vault.service';
@@ -129,7 +130,8 @@ private isQueueProcessing = false;
     private syncStatus: SyncStatusService,
     private vaultService: VaultService,
     private toastCtrl: ToastController,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private notificationService: NotificationService
   ) {}
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -596,6 +598,8 @@ async syncOnlineDocuments() {
     'Syncing documents...'
   );
 
+  this.notificationService.syncStarted();
+
   try {
 
     // ───────────────────────────────
@@ -879,12 +883,16 @@ const localMap =
       '✅ Metadata sync completed'
     );
 
+    await this.notificationService.syncCompleted(processed);
+
   } catch (e) {
 
     console.error(
       '❌ Sync failed',
       e
     );
+
+    await this.notificationService.syncFailed();
 
   } finally {
 
@@ -1698,6 +1706,8 @@ if (!isMobile) {
       '✅ DOWNLOAD SUCCESS'
     );
 
+    await this.notificationService.driveDownloadCompleted(fileName);
+
   } catch (e) {
 
     doc.isDownloading = false;
@@ -1711,6 +1721,8 @@ if (!isMobile) {
       'Download failed',
       'danger'
     );
+
+    await this.notificationService.driveDownloadFailed(doc.original_name || 'file');
   }
 }
   // ── Share ──────────────────────────────────────────────────────────────────
@@ -2011,6 +2023,7 @@ private async blobToBase64String(
       }
 
       await this.showToast('Document deleted');
+      await this.notificationService.driveDeleteCompleted(doc.original_name || 'Document');
     } catch (err) {
       console.error('❌ Final delete error', err);
       await this.showToast('Delete failed — please try again', 'danger');

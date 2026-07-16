@@ -1,0 +1,82 @@
+<ion-header class="notif-header">
+  <ion-toolbar>
+    <div class="notif-title-row">
+      <ion-title>Notifications</ion-title>
+      <a class="mark-all-link" (click)="markAllAsRead()" *ngIf="allNotifications.length">Mark all as read</a>
+    </div>
+    <ion-buttons slot="end">
+      <ion-button (click)="dismiss()">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <div class="filter-row">
+    <button
+      class="filter-chip"
+      *ngFor="let f of filters"
+      [class.filter-chip--active]="activeFilter === f.key"
+      (click)="setFilter(f.key)">
+      {{ f.label }}
+    </button>
+  </div>
+</ion-header>
+
+<ion-content class="notif-content">
+
+  <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <div class="notif-list" *ngIf="filtered.length; else emptyState">
+
+    <ion-item-sliding *ngFor="let n of filtered; trackBy: trackById">
+
+      <ion-item lines="none" class="notif-card-wrapper">
+        <div
+          class="notif-card"
+          [class.notif-card--unread]="!n.read"
+          (click)="onNotificationTap(n)">
+
+          <div class="notif-icon" [ngClass]="'notif-icon--' + n.color">
+            <ion-icon [name]="n.icon"></ion-icon>
+          </div>
+
+          <div class="notif-copy">
+            <div class="notif-copy-top">
+              <h5>{{ n.title }}</h5>
+              <span class="notif-time">{{ n.timestamp | relativeTime }}</span>
+            </div>
+            <p>{{ n.message }}</p>
+            <a class="notif-action" *ngIf="n.action">{{ n.action.label }}</a>
+          </div>
+
+          <span class="notif-dot" *ngIf="!n.read"></span>
+        </div>
+      </ion-item>
+
+      <ion-item-options side="end">
+        <ion-item-option color="danger" (click)="deleteOne(n)">
+          <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+        </ion-item-option>
+      </ion-item-options>
+
+    </ion-item-sliding>
+
+  </div>
+
+  <ng-template #emptyState>
+    <div class="notif-empty">
+      <ion-icon name="notifications-off-outline"></ion-icon>
+      <p>No notifications{{ activeFilter !== 'all' ? ' in this category' : '' }} yet</p>
+    </div>
+  </ng-template>
+
+  <div class="notif-footer" *ngIf="allNotifications.length">
+    <button class="clear-all-btn" (click)="clearAll()">
+      <ion-icon name="trash-outline"></ion-icon>
+      Clear all
+    </button>
+  </div>
+
+</ion-content>

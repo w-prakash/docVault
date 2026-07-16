@@ -6,6 +6,7 @@ import { VaultUnlockComponent } from '../components/vault-unlock/vault-unlock.co
 import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
 import { Preferences } from '@capacitor/preferences';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
+import { NotificationService } from './notification.service';
 @Injectable({ providedIn: 'root' })
 export class VaultService {
 
@@ -16,7 +17,10 @@ private lockListeners:
   isUnlocking = false;
   private unlockPromise:
   Promise<string | null> | null = null;
-  constructor(private modalCtrl: ModalController) {
+  constructor(
+    private modalCtrl: ModalController,
+    private notificationService: NotificationService
+  ) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
          this.clearKey();
@@ -299,6 +303,9 @@ Promise<string | null> {
     '🔓 Vault unlocked'
   );
 
+  this.emitLockState(false);
+  this.notificationService.vaultUnlocked();
+
   this.isUnlocking = false;
 
   return key;
@@ -397,10 +404,16 @@ private async openUnlockModal(mode: 'unlock' | 'create' = 'unlock'): Promise<str
   // 🔐 manual lock
 clearKey() {
 
+  const wasUnlocked = !!this.vaultKey;
+
   this.vaultKey = null;
 
   // 🔒 trigger animation
   this.emitLockState(true);
+
+  if (wasUnlocked) {
+    this.notificationService.vaultLocked();
+  }
 }
 
 /** Explicit user-triggered lock (e.g. a "Lock Vault" button in Settings). Same effect as auto-lock, named separately so call sites read clearly. */

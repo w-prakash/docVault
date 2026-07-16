@@ -2,13 +2,15 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { IonicModule, ToastController } from '@ionic/angular';
+import { IonicModule, ModalController, ToastController } from '@ionic/angular';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { VaultService } from '../services/vault.service';
 import { UserProfile, UserService } from '../services/user.service';
 import { OfflineVaultService } from '../services/offline-vault.service';
 import { SyncStatusService } from '../services/sync-status';
+import { NotificationService } from '../services/notification.service';
+import { NotificationCenterComponent } from '../components/notifications/notification-center.component';
 
 interface RecentDoc {
   id: number;
@@ -33,6 +35,7 @@ export class DashboardPage implements OnInit, OnDestroy {
   isOnline = true;
   lastSync = '';
   recentDocuments: RecentDoc[] = [];
+  unreadNotifications = 0;
 
   private destroy$ = new Subject<void>();
 
@@ -42,7 +45,9 @@ export class DashboardPage implements OnInit, OnDestroy {
     public userService: UserService,
     private offlineVault: OfflineVaultService,
     private syncStatus: SyncStatusService,
-    private toastCtrl: ToastController
+    private toastCtrl: ToastController,
+    private notificationService: NotificationService,
+    private modalCtrl: ModalController
   ) {}
 
   ngOnInit() {
@@ -60,7 +65,21 @@ export class DashboardPage implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(v => (this.lastSync = v));
 
+    this.notificationService.ensureLoaded();
+
+    this.notificationService.unreadCount$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(count => (this.unreadNotifications = count));
+
     this.loadVaultSummary();
+  }
+
+  async openNotifications() {
+    const modal = await this.modalCtrl.create({
+      component: NotificationCenterComponent,
+      cssClass: 'notification-center-modal'
+    });
+    await modal.present();
   }
 
   ionViewWillEnter() {
