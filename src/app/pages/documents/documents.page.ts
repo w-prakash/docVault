@@ -879,6 +879,12 @@ const localMap =
 
     await this.loadOfflineDocuments();
 
+    // Fire-and-forget: fill in thumbnails for docs that came from Drive
+    // but were never cached on this device (e.g. fresh install / reinstall).
+    // Not awaited so the list renders immediately with placeholders that
+    // fill in progressively, instead of blocking on every file's download.
+    this.prefetchMissingThumbnails();
+
     console.log(
       '✅ Metadata sync completed'
     );
@@ -908,6 +914,87 @@ localStorage.setItem(
   'last_sync_time',
   new Date().toISOString()
 );
+  }
+}
+
+// ─────────────────────────────────────
+// PREFETCH MISSING THUMBNAILS (background, non-blocking)
+// Fresh installs / reinstalls pull document metadata from Drive but have
+// no locally cached files yet, so the list shows placeholders until each
+// doc is individually opened. This fills them in proactively, capped and
+// sequential so it doesn't hammer Drive or battery on a large vault.
+// ─────────────────────────────────────
+
+private isPrefetchingThumbnails = false;
+
+async prefetchMissingThumbnails(): Promise<void> {
+
+  if (this.isPrefetchingThumbnails) {
+    return;
+  }
+
+  if (!navigator.onLine) {
+    return;
+  }
+
+  if (this.vaultService.isLocked) {
+    // vault is locked — can't decrypt to generate thumbnails right now,
+    // this will just run again on the next sync once unlocked
+    return;
+  }
+
+  this.isPrefetchingThumbnails = true;
+
+  const MAX_PER_PASS = 20;
+
+  try {
+
+    const allDocs =
+      await this.offlineVault.documents.toArray();
+
+    const missing =
+      allDocs
+        .filter(d => d.server_id && !d.thumbnail_path && !d.local_only)
+        .slice(0, MAX_PER_PASS);
+
+    if (!missing.length) {
+      return;
+    }
+
+    console.log(`🖼 Prefetching ${missing.length} missing thumbnails`);
+
+    for (const doc of missing) {
+
+      if (!navigator.onLine) {
+        console.log('📴 Went offline mid-prefetch — stopping');
+        break;
+      }
+
+      try {
+
+        await this.ensureLocalFile(doc);
+
+        // reflect progress in the visible list as each one completes,
+        // rather than making the user wait for the whole batch
+        await this.loadOfflineDocuments();
+
+      } catch (e) {
+
+        console.warn('⚠️ Thumbnail prefetch failed for doc', doc.id, e);
+
+      }
+    }
+
+    console.log('✅ Thumbnail prefetch pass complete');
+
+  } catch (e) {
+
+    console.error('❌ Thumbnail prefetch failed', e);
+
+  } finally {
+
+    this.isPrefetchingThumbnails = false;
+
   }
 }
 
@@ -2233,7 +2320,11 @@ async ensureLocalFile(
         doc.id,
         {
           local_path:
-            localPath
+            localPath,
+          local_file_name:
+            fileName,
+          thumbnail_path:
+            `thumbnails/${fileName}.thumb`
         }
       );
 
