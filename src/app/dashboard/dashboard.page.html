@@ -22,7 +22,7 @@
     <!-- GREETING -->
     <div class="greeting-row" *ngIf="userService.profile$ | async as profile">
 
-      <div class="avatar-ring">
+      <div class="avatar-ring" (click)="goToProfile()">
         <img
           *ngIf="profile.photoUrl && !avatarError"
           [src]="profile.photoUrl"

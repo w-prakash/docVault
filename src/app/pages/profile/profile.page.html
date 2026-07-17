@@ -1,0 +1,218 @@
+<ion-header class="app-header">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+
+    <ion-title>Profile</ion-title>
+
+    <ion-buttons slot="end">
+      <ion-button (click)="openNotifications()" class="bell-btn">
+        <ion-icon name="notifications-outline" slot="icon-only"></ion-icon>
+        <span class="bell-dot" *ngIf="unreadNotifications > 0">{{ unreadNotifications > 9 ? '9+' : unreadNotifications }}</span>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="app-bg profile-bg">
+
+  <div class="page-container">
+
+    <!-- PROFILE CARD -->
+    <div class="glass-card profile-card" *ngIf="userService.profile$ | async as profile">
+
+      <div class="profile-avatar-wrap">
+        <img
+          *ngIf="profile.photoUrl && !avatarError"
+          [src]="profile.photoUrl"
+          class="profile-avatar"
+          alt="Profile"
+          referrerpolicy="no-referrer"
+          (error)="avatarError = true">
+        <div *ngIf="!profile.photoUrl || avatarError" class="profile-avatar profile-avatar-fallback">
+          {{ profile.displayName?.charAt(0) }}
+        </div>
+        <button class="avatar-edit-btn" (click)="comingSoon('Change photo')">
+          <ion-icon name="pencil"></ion-icon>
+        </button>
+      </div>
+
+      <div class="profile-info">
+        <div class="profile-name-row">
+          <h2>{{ profile.displayName }}</h2>
+          <ion-icon name="shield-checkmark" class="verified-badge"></ion-icon>
+        </div>
+        <p class="profile-email">{{ profile.email }}</p>
+
+        <div class="vault-pill">
+          <ion-icon name="shield-checkmark-outline"></ion-icon>
+          Vault Protected
+        </div>
+      </div>
+
+      <ion-icon name="chevron-forward" class="profile-chevron"></ion-icon>
+
+    </div>
+
+    <!-- STORAGE OVERVIEW -->
+    <div class="glass-card storage-card">
+
+      <div class="section-title">Storage Overview</div>
+
+      <div class="storage-top">
+
+        <div class="storage-ring">
+          <svg viewBox="0 0 160 160">
+            <circle class="ring-track" cx="80" cy="80" r="70"></circle>
+            <circle
+              class="ring-progress"
+              cx="80" cy="80" r="70"
+              [attr.stroke-dasharray]="ringCircumference"
+              [attr.stroke-dashoffset]="ringOffset">
+            </circle>
+          </svg>
+          <div class="ring-center">
+            <h3>{{ isLoadingStorage ? '—' : formatBytes(usedBytes) }}</h3>
+            <p>Used of 15 GB</p>
+          </div>
+        </div>
+
+        <div class="storage-breakdown">
+
+          <div class="breakdown-row">
+            <div class="breakdown-icon breakdown-icon--docs">
+              <ion-icon name="document-text-outline"></ion-icon>
+            </div>
+            <div class="breakdown-copy">
+              <h5>Documents</h5>
+              <p>{{ isLoadingStorage ? '—' : documentRecordCount }} Files</p>
+            </div>
+            <span class="breakdown-value">{{ isLoadingStorage ? '—' : formatBytes(documentBytes) }}</span>
+          </div>
+
+          <div class="breakdown-row">
+            <div class="breakdown-icon breakdown-icon--cache">
+              <ion-icon name="folder-outline"></ion-icon>
+            </div>
+            <div class="breakdown-copy">
+              <h5>Cached Files</h5>
+              <p>{{ isLoadingStorage ? '—' : cachedFileCount }} Files</p>
+            </div>
+            <span class="breakdown-value">{{ isLoadingStorage ? '—' : formatBytes(cachedBytes) }}</span>
+          </div>
+
+          <div class="breakdown-row">
+            <div class="breakdown-icon breakdown-icon--free">
+              <ion-icon name="cloud-upload-outline"></ion-icon>
+            </div>
+            <div class="breakdown-copy">
+              <h5>Free Space</h5>
+              <p>Available</p>
+            </div>
+            <span class="breakdown-value">{{ isLoadingStorage ? '—' : formatBytes(freeBytes) }}</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="storage-details-row" (click)="goToStorageDetails()">
+        <div class="breakdown-icon breakdown-icon--pie">
+          <ion-icon name="pie-chart-outline"></ion-icon>
+        </div>
+        <div class="breakdown-copy">
+          <h5>Storage Details</h5>
+          <p>View usage and manage storage</p>
+        </div>
+        <ion-icon name="chevron-forward" class="row-chevron"></ion-icon>
+      </div>
+
+    </div>
+
+    <!-- QUICK ACTIONS -->
+    <div class="section-title standalone-title">Quick Actions</div>
+
+    <div class="quick-actions-grid">
+      <button
+        class="glass-card quick-action"
+        *ngFor="let qa of quickActions"
+        (click)="qa.action()">
+        <div class="qa-icon" [ngClass]="qa.colorClass">
+          <ion-icon [name]="qa.icon"></ion-icon>
+        </div>
+        <span>{{ qa.label }}</span>
+      </button>
+    </div>
+
+    <!-- ACCOUNT INFORMATION -->
+    <div class="glass-card account-card">
+
+      <div class="section-title">Account Information</div>
+
+      <div class="account-row" *ngIf="userService.profile$ | async as profile">
+        <div class="account-icon account-icon--mail">
+          <ion-icon name="mail-outline"></ion-icon>
+        </div>
+        <div class="account-copy">
+          <h5>Email Address</h5>
+          <p>{{ profile.email }}</p>
+        </div>
+        <ion-icon name="chevron-forward" class="row-chevron"></ion-icon>
+      </div>
+
+      <div class="account-row">
+        <div class="account-icon account-icon--calendar">
+          <ion-icon name="calendar-outline"></ion-icon>
+        </div>
+        <div class="account-copy">
+          <h5>Member Since</h5>
+          <p>{{ memberSince }}</p>
+        </div>
+        <ion-icon name="chevron-forward" class="row-chevron"></ion-icon>
+      </div>
+
+      <div class="account-row">
+        <div class="account-icon account-icon--people">
+          <ion-icon name="people-outline"></ion-icon>
+        </div>
+        <div class="account-copy">
+          <h5>Account Type</h5>
+          <p>{{ accountType }}</p>
+        </div>
+        <ion-icon name="chevron-forward" class="row-chevron"></ion-icon>
+      </div>
+
+      <div class="account-row">
+        <div class="account-icon account-icon--globe">
+          <ion-icon name="globe-outline"></ion-icon>
+        </div>
+        <div class="account-copy">
+          <h5>Region</h5>
+          <p>{{ region }}</p>
+        </div>
+        <ion-icon name="chevron-forward" class="row-chevron"></ion-icon>
+      </div>
+
+      <div class="encryption-note">
+        <ion-icon name="shield-checkmark-outline"></ion-icon>
+        Your data is end-to-end encrypted and only accessible to you.
+      </div>
+
+    </div>
+
+    <!-- LOG OUT -->
+    <ion-button
+      expand="block"
+      fill="outline"
+      class="logout-btn"
+      (click)="logout()">
+      <ion-icon name="log-out-outline" slot="start"></ion-icon>
+      Log Out
+    </ion-button>
+
+  </div>
+
+</ion-content>

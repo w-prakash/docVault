@@ -12,7 +12,7 @@
   <div class="page-container">
 
     <!-- ACCOUNT -->
-    <div class="user-profile" *ngIf="userService.profile$ | async as profile">
+    <div class="user-profile" *ngIf="userService.profile$ | async as profile" (click)="goToProfile()">
       <img *ngIf="profile.photoUrl" [src]="profile.photoUrl" class="user-avatar" alt="Profile">
       <div *ngIf="!profile.photoUrl" class="user-avatar user-avatar-fallback">
         {{ profile.displayName?.charAt(0) }}

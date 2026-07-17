@@ -1,0 +1,191 @@
+<ion-header class="app-header">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Settings</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="app-bg">
+
+  <div class="page-container">
+
+    <!-- ACCOUNT -->
+    <div class="user-profile" *ngIf="userService.profile$ | async as profile">
+      <img *ngIf="profile.photoUrl" [src]="profile.photoUrl" class="user-avatar" alt="Profile">
+      <div *ngIf="!profile.photoUrl" class="user-avatar user-avatar-fallback">
+        {{ profile.displayName?.charAt(0) }}
+      </div>
+      <h3>{{ profile.displayName }}</h3>
+      <p>{{ profile.email }}</p>
+    </div>
+
+    <!-- STORAGE USED -->
+    <div class="glass-card settings-section">
+      <div class="section-title">Storage</div>
+
+      <div class="storage-row">
+        <div class="storage-stat">
+          <span class="storage-value">{{ isLoadingStorage ? '—' : documentCount }}</span>
+          <span class="storage-label">Documents</span>
+        </div>
+        <div class="storage-stat">
+          <span class="storage-value">{{ isLoadingStorage ? '—' : cachedFileCount }}</span>
+          <span class="storage-label">Cached Files</span>
+        </div>
+        <div class="storage-stat">
+          <span class="storage-value">{{ storageLabel }}</span>
+          <span class="storage-label">Used on device</span>
+        </div>
+      </div>
+
+      <ion-button
+        expand="block"
+        fill="outline"
+        [disabled]="isClearingCache"
+        (click)="clearCache()">
+        <ion-spinner *ngIf="isClearingCache" name="crescent" slot="start"></ion-spinner>
+        {{ isClearingCache ? 'Clearing…' : 'Clear Local Cache' }}
+      </ion-button>
+    </div>
+
+    <!-- SECURITY -->
+    <div class="glass-card settings-section">
+      <div class="section-title">Security</div>
+
+      <ion-item lines="none" class="settings-item" *ngIf="biometricAvailable">
+        <ion-icon name="finger-print-outline" slot="start"></ion-icon>
+        <ion-label>Biometric Unlock</ion-label>
+        <ion-toggle
+          slot="end"
+          [checked]="biometricEnabled"
+          (ionChange)="onBiometricToggle($event.detail.checked)">
+        </ion-toggle>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="timer-outline" slot="start"></ion-icon>
+        <ion-label>Auto-Lock</ion-label>
+        <ion-select
+          slot="end"
+          interface="popover"
+          [value]="autoLockMinutes"
+          (ionChange)="onAutoLockChange($event.detail.value)">
+          <ion-select-option [value]="1">1 minute</ion-select-option>
+          <ion-select-option [value]="5">5 minutes</ion-select-option>
+          <ion-select-option [value]="15">15 minutes</ion-select-option>
+          <ion-select-option [value]="0">Never</ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="lock-closed-outline" slot="start"></ion-icon>
+        <ion-label>
+          Lock on Background
+          <p class="item-note">Always on — locks instantly when the app is backgrounded</p>
+        </ion-label>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="shield-checkmark-outline" slot="start"></ion-icon>
+        <ion-label>
+          Documents Require Vault Unlock
+          <p class="item-note">Always on — enforced by the app's route guards</p>
+        </ion-label>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="time-outline" slot="start"></ion-icon>
+        <ion-label>Last Unlock</ion-label>
+        <span slot="end" class="item-value">{{ formatLastUnlock() }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="key-outline" slot="start"></ion-icon>
+        <ion-label>Encryption</ion-label>
+        <span slot="end" class="item-value">AES-256</span>
+      </ion-item>
+    </div>
+
+    <!-- APP INFORMATION -->
+    <div class="glass-card settings-section">
+      <div class="section-title">App Information</div>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="information-circle-outline" slot="start"></ion-icon>
+        <ion-label>Version</ion-label>
+        <span slot="end" class="item-value">{{ appVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item" *ngIf="appBuild !== '—'">
+        <ion-icon name="build-outline" slot="start"></ion-icon>
+        <ion-label>Build</ion-label>
+        <span slot="end" class="item-value">{{ appBuild }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="server-outline" slot="start"></ion-icon>
+        <ion-label>Database Version</ion-label>
+        <span slot="end" class="item-value">{{ databaseVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="cloud-outline" slot="start"></ion-icon>
+        <ion-label>Google Drive API</ion-label>
+        <span slot="end" class="item-value">{{ driveApiVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="hardware-chip-outline" slot="start"></ion-icon>
+        <ion-label>Capacitor</ion-label>
+        <span slot="end" class="item-value">{{ capacitorVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="logo-angular" slot="start"></ion-icon>
+        <ion-label>Angular</ion-label>
+        <span slot="end" class="item-value">{{ angularVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="apps-outline" slot="start"></ion-icon>
+        <ion-label>Ionic</ion-label>
+        <span slot="end" class="item-value">{{ ionicVersion }}</span>
+      </ion-item>
+    </div>
+
+    <!-- ACCOUNT ACTIONS -->
+    <div class="glass-card settings-section">
+      <div class="section-title">Account</div>
+
+      <ion-item button lines="none" class="settings-item" (click)="switchAccount()">
+        <ion-icon name="swap-horizontal-outline" slot="start"></ion-icon>
+        <ion-label>Switch Account</ion-label>
+      </ion-item>
+
+      <ion-item button lines="none" class="settings-item" (click)="logout()">
+        <ion-icon name="log-out-outline" slot="start"></ion-icon>
+        <ion-label>Log Out</ion-label>
+      </ion-item>
+    </div>
+
+    <!-- DANGER ZONE -->
+    <div class="glass-card settings-section danger-zone">
+      <div class="section-title danger-title">Danger Zone</div>
+
+      <p class="danger-copy">
+        Resetting erases your vault password and all locally cached files on this
+        device. Documents already uploaded to Google Drive are not deleted, but you
+        will need your current password to decrypt them again.
+      </p>
+
+      <ion-item button lines="none" class="settings-item danger-action" (click)="resetVault()">
+        <ion-icon name="warning-outline" slot="start"></ion-icon>
+        <ion-label>Reset Vault</ion-label>
+      </ion-item>
+    </div>
+
+  </div>
+
+</ion-content>

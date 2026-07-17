@@ -512,6 +512,72 @@ async getLocalStorageUsage(): Promise<{
 }
 
 // =====================================
+// STORAGE BREAKDOWN (Profile page)
+// Same directories as getLocalStorageUsage(), but split by directory
+// instead of combined, so the UI can show "Documents" vs "Cached Files"
+// as separate rows with their own real byte counts.
+// =====================================
+
+async getLocalStorageBreakdown(): Promise<{
+  documentRecordCount: number;
+  documentBytes: number;
+  cachedFileCount: number;
+  cachedBytes: number;
+}> {
+
+  const documentRecordCount =
+    await this.documents.count();
+
+  let documentBytes = 0;
+  let cachedFileCount = 0;
+  let cachedBytes = 0;
+
+  try {
+
+    const vaultDir =
+      await Filesystem.readdir({
+        path: 'vault',
+        directory: Directory.Data
+      });
+
+    for (const file of vaultDir.files) {
+      if (file.type === 'file') {
+        documentBytes += file.size ?? 0;
+      }
+    }
+
+  } catch {
+    // 'vault' directory doesn't exist yet - nothing cached, that's fine
+  }
+
+  try {
+
+    const thumbsDir =
+      await Filesystem.readdir({
+        path: 'thumbnails',
+        directory: Directory.Data
+      });
+
+    for (const file of thumbsDir.files) {
+      if (file.type === 'file') {
+        cachedFileCount++;
+        cachedBytes += file.size ?? 0;
+      }
+    }
+
+  } catch {
+    // 'thumbnails' directory doesn't exist yet - nothing cached, that's fine
+  }
+
+  return {
+    documentRecordCount,
+    documentBytes,
+    cachedFileCount,
+    cachedBytes
+  };
+}
+
+// =====================================
 // CLEAR CACHE (Phase 10)
 // Removes locally cached encrypted files + thumbnails to free device
 // storage. Document metadata is kept and marked as not-locally-cached,

@@ -1,0 +1,375 @@
+/*
+ * App Global CSS
+ * ----------------------------------------------------------------------------
+ * Put style rules here that you want to apply globally. These styles are for
+ * the entire app and not just one component. Additionally, this file can be
+ * used as an entry point to import other CSS/Sass files to be included in the
+ * output CSS.
+ * For more information on global stylesheets, visit the documentation:
+ * https://ionicframework.com/docs/layout/global-stylesheets
+ */
+
+/* Core CSS required for Ionic components to work properly */
+@import "@ionic/angular/css/core.css";
+
+/* Basic CSS for apps built with Ionic */
+@import "@ionic/angular/css/normalize.css";
+@import "@ionic/angular/css/structure.css";
+@import "@ionic/angular/css/typography.css";
+@import "@ionic/angular/css/display.css";
+
+/* Optional CSS utils that can be commented out */
+@import "@ionic/angular/css/padding.css";
+@import "@ionic/angular/css/float-elements.css";
+@import "@ionic/angular/css/text-alignment.css";
+@import "@ionic/angular/css/text-transformation.css";
+@import "@ionic/angular/css/flex-utils.css";
+
+/**
+ * Ionic Dark Mode
+ * -----------------------------------------------------
+ * For more info, please see:
+ * https://ionicframework.com/docs/theming/dark-mode
+ */
+
+/* @import "@ionic/angular/css/palettes/dark.always.css"; */
+/* @import "@ionic/angular/css/palettes/dark.class.css"; */
+@import "@ionic/angular/css/palettes/dark.system.css";
+.highlight {
+  background: yellow;
+  color: black;
+  font-weight: bold;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+ion-searchbar {
+        --background: #ffffff !important;
+    --border-radius: 6rem !important;
+    color: grey !important;
+    --box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 1px 5px 0 rgba(0, 0, 0, 0.12) !important;
+}
+/* ===== APP BACKGROUND ===== */
+
+/* ===== DASHBOARD WIDGET ===== */
+/* ===== APP BACKGROUND ===== */
+
+.app-bg {
+  --background: var(--app-bg);
+  color: var(--text-primary);
+}
+
+/* ===== PAGE PADDING ===== */
+
+.page-container {
+  padding: var(--padding-page);
+}
+
+/* ===== PAGE HEADER ===== */
+
+.page-header {
+  margin-bottom: 20px;
+
+  h2 {
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0;
+    letter-spacing: -1px;
+  }
+
+  p {
+    margin-top: 8px;
+    color: rgba(255,255,255,0.7);
+    font-size: 16px;
+  }
+}
+
+/* ===== GLASS CARD ===== */
+
+.glass-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: var(--blur);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+/* ===== GRID ===== */
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+/* ===== DASHBOARD WIDGET ===== */
+
+.app-widget {
+  padding: 18px;
+  text-align: center;
+
+  min-height: 120px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  transition: 0.2s ease;
+
+  background: rgba(255,255,255,0.06);
+
+  border: 1px solid rgba(255,255,255,0.08);
+
+  backdrop-filter: blur(14px);
+
+  border-radius: 24px;
+
+  box-shadow:
+    0 8px 30px rgba(0,0,0,0.25);
+
+  span {
+    font-size: 42px;
+    margin-bottom: 14px;
+  }
+
+  p {
+    margin: 0;
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+/* ===== INPUTS ===== */
+
+ion-input,
+ion-searchbar,
+ion-select,
+ion-textarea {
+  --background: rgba(255,255,255,0.08);
+  --color: white;
+  --placeholder-color: rgba(255,255,255,0.5);
+  --border-radius: 14px;
+}
+
+/* ===== BUTTON ===== */
+
+ion-button {
+  --border-radius: 14px;
+  font-weight: 600;
+}
+
+/* =========================================
+   VAULT ACTION SHEET
+========================================= */
+
+.vault-action-sheet {
+
+  .action-sheet-group.sc-ion-action-sheet-md {
+
+    background:
+      linear-gradient(
+        180deg,
+        rgba(10,18,40,0.98),
+        rgba(15,23,42,0.98)
+      ) !important;
+
+    backdrop-filter: blur(18px);
+
+    border-top-left-radius: 26px !important;
+    border-top-right-radius: 26px !important;
+
+    overflow: hidden;
+
+    border:
+      1px solid rgba(255,255,255,0.05);
+
+    box-shadow:
+      0 -8px 35px rgba(0,0,0,0.45);
+
+    padding-top: 8px;
+  }
+
+  /* HEADER */
+
+  .action-sheet-title {
+
+    color:
+      rgba(255,255,255,0.58) !important;
+
+    font-size: 13px !important;
+
+    font-weight: 600;
+
+    padding:
+      8px 18px 10px !important;
+
+    letter-spacing: 0.3px;
+  }
+
+  /* BUTTON */
+
+  .action-sheet-button {
+    width: 94%;
+    color: white !important;
+
+    background:
+      rgba(255,255,255,0.045);
+
+    margin:
+      5px 12px;
+
+    border-radius: 16px;
+
+    min-height: 52px;
+
+    font-size: 15px;
+
+    font-weight: 500;
+
+    transition: 0.2s;
+
+    border:
+      1px solid rgba(255,255,255,0.04);
+  }
+
+  /* PRESS EFFECT */
+
+  .action-sheet-button:active {
+
+    transform: scale(0.98);
+
+    background:
+      rgba(59,130,246,0.14);
+  }
+
+  /* ICON */
+
+  .action-sheet-icon {
+
+    color:
+      rgba(255,255,255,0.7) !important;
+
+    font-size: 19px !important;
+  }
+
+  /* DELETE */
+
+  .action-sheet-destructive {
+
+    color: #ef4444 !important;
+  }
+
+  .action-sheet-destructive
+  .action-sheet-icon {
+
+    color: #ef4444 !important;
+  }
+
+  /* CANCEL */
+
+  .action-sheet-cancel {
+
+    margin-top: 12px;
+
+    background:
+      rgba(255,255,255,0.06) !important;
+
+    border:
+      1px solid rgba(255,255,255,0.05);
+  }
+}
+
+
+/* =========================================
+   ION SELECT ACTION SHEET
+========================================= */
+
+ion-action-sheet {
+
+  --background:
+    rgba(10,18,40,0.98);
+
+  --button-background:
+    rgba(255,255,255,0.04);
+
+  --button-color: white;
+
+  --backdrop-opacity: 0.5;
+}
+
+/* GROUP */
+
+.action-sheet-group.sc-ion-action-sheet-md {
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(10,18,40,0.98),
+      rgba(15,23,42,0.98)
+    ) !important;
+
+  border-top-left-radius: 28px !important;
+  border-top-right-radius: 28px !important;
+
+  overflow: hidden;
+}
+
+/* BUTTON */
+
+.action-sheet-button {
+
+  color: white !important;
+  width: 95% !important;
+  background:
+    rgba(255,255,255,0.04);
+
+  margin: 6px 12px;
+
+  border-radius: 16px;
+}
+
+/* TITLE */
+
+.action-sheet-title {
+
+  color:
+    rgba(255,255,255,0.65) !important;
+}
+
+/* ICON */
+
+.action-sheet-icon {
+
+  color:
+    rgba(255,255,255,0.72) !important;
+}
+/* ============================================================
+   NOTIFICATION CENTER MODAL
+   Slides in from the right like a panel, matching the DocVault
+   dark glassmorphism theme used across the rest of the app.
+============================================================ */
+
+.notification-center-modal {
+  --width: min(420px, 100%);
+  --height: 100%;
+  --border-radius: 0;
+  align-items: stretch;
+  justify-content: flex-end;
+
+  &::part(content) {
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+@media (max-width: 480px) {
+  .notification-center-modal {
+    --width: 100%;
+  }
+}

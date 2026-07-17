@@ -52,6 +52,12 @@ const routes: Routes = [
     import('./settings/settings/settings.page').then((m) => m.SettingsPage),
   },
   {
+    path: 'profile',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+    import('./pages/profile/profile.page').then((m) => m.ProfilePage),
+  },
+  {
     path: 'reports',
     canActivate: [AuthGuard],
     loadComponent: () =>

@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { VaultService } from './services/vault.service';
 import { GoogleAuthService } from './core/google/auth/google-auth.service';
 import { GoogleSyncService } from './core/google/sync/google-sync.service';
+import { UserService } from './services/user.service';
 
 @Component({
   selector: 'app-root',
@@ -12,9 +13,11 @@ import { GoogleSyncService } from './core/google/sync/google-sync.service';
 export class AppComponent {
 
   showVaultLock = false;
+  avatarError = false;
 
   constructor(
     public vaultService: VaultService,
+    public userService: UserService,
     private googleAuthService: GoogleAuthService,
     private googleSyncService: GoogleSyncService
   ) {}

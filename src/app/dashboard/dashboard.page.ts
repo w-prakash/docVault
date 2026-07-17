@@ -176,4 +176,8 @@ export class DashboardPage implements OnInit, OnDestroy {
   goToSettings() {
     this.router.navigateByUrl('/settings');
   }
+
+  goToProfile() {
+    this.router.navigateByUrl('/profile');
+  }
 }

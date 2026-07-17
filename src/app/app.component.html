@@ -33,6 +33,37 @@
 
       </div>
 
+      <!-- ACCOUNT CARD -->
+
+      <ion-menu-toggle auto-hide="false" *ngIf="userService.profile$ | async as profile">
+
+        <div
+          class="menu-account-card"
+          routerLink="/profile"
+          routerDirection="root">
+
+          <img
+            *ngIf="profile.photoUrl && !avatarError"
+            [src]="profile.photoUrl"
+            class="menu-avatar"
+            alt="Profile"
+            referrerpolicy="no-referrer"
+            (error)="avatarError = true">
+          <div *ngIf="!profile.photoUrl || avatarError" class="menu-avatar menu-avatar-fallback">
+            {{ profile.displayName?.charAt(0) }}
+          </div>
+
+          <div class="menu-account-text">
+            <h3>{{ profile.displayName }}</h3>
+            <p>{{ profile.email }}</p>
+          </div>
+
+          <ion-icon name="chevron-forward" class="menu-account-chevron"></ion-icon>
+
+        </div>
+
+      </ion-menu-toggle>
+
       <!-- MENU ITEMS -->
 
 <ion-list lines="none">

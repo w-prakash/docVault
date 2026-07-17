@@ -61,6 +61,10 @@ export class SettingsPage implements OnInit {
     this.loadAppInfo();
   }
 
+  goToProfile() {
+    this.router.navigateByUrl('/profile');
+  }
+
   // =====================================
   // SECURITY
   // =====================================
