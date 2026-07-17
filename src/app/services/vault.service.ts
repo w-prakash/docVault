@@ -7,6 +7,10 @@ import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
 import { Preferences } from '@capacitor/preferences';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { NotificationService } from './notification.service';
+const AUTO_LOCK_MINUTES_KEY = 'vault_auto_lock_minutes';
+const BIOMETRIC_ENABLED_KEY = 'vault_biometric_enabled';
+const DEFAULT_AUTO_LOCK_MINUTES = 5;
+
 @Injectable({ providedIn: 'root' })
 export class VaultService {
 
@@ -17,6 +21,10 @@ private lockListeners:
   isUnlocking = false;
   private unlockPromise:
   Promise<string | null> | null = null;
+
+  /** ISO timestamp of the most recent successful unlock, in-memory only (not persisted — resets on app restart, which is correct: there's nothing to show before the first unlock of a session). */
+  lastUnlockTime: string | null = null;
+
   constructor(
     private modalCtrl: ModalController,
     private notificationService: NotificationService
@@ -227,7 +235,8 @@ Promise<string | null> {
   // =====================================
 
   const biometricSuccess =
-    await this.tryBiometricUnlock();
+    (await this.getBiometricEnabled()) &&
+    (await this.tryBiometricUnlock());
 
   if (
     biometricSuccess &&
@@ -296,6 +305,8 @@ Promise<string | null> {
   // =====================================
 
   this.vaultKey = key;
+
+  this.lastUnlockTime = new Date().toISOString();
 
   this.startAutoLock();
 
@@ -392,13 +403,82 @@ private async openUnlockModal(mode: 'unlock' | 'create' = 'unlock'): Promise<str
   return data;
 }
 
-  // 🔒 auto lock after 5 min
+  // 🔒 auto lock — duration configurable via Settings, defaults to 5 min
   private startAutoLock() {
     clearTimeout(this.lockTimer);
 
-    this.lockTimer = setTimeout(() => {
-      this.clearKey();
-    }, 5 * 60 * 1000);
+    this.getAutoLockMinutes().then(minutes => {
+
+      // 0 = "Never" — don't schedule a timer at all
+      if (minutes <= 0) {
+        return;
+      }
+
+      this.lockTimer = setTimeout(() => {
+        this.clearKey();
+      }, minutes * 60 * 1000);
+
+    });
+  }
+
+  // =====================================
+  // AUTO-LOCK PREFERENCE (Settings)
+  // =====================================
+
+  async getAutoLockMinutes(): Promise<number> {
+
+    const { value } = await Preferences.get({ key: AUTO_LOCK_MINUTES_KEY });
+
+    if (value === null || value === undefined) {
+      return DEFAULT_AUTO_LOCK_MINUTES;
+    }
+
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? DEFAULT_AUTO_LOCK_MINUTES : parsed;
+  }
+
+  async setAutoLockMinutes(minutes: number): Promise<void> {
+
+    await Preferences.set({
+      key: AUTO_LOCK_MINUTES_KEY,
+      value: String(minutes)
+    });
+
+    // re-arm immediately with the new duration if currently unlocked
+    if (!this.isLocked) {
+      this.startAutoLock();
+    }
+  }
+
+  // =====================================
+  // BIOMETRIC PREFERENCE (Settings)
+  // =====================================
+
+  async getBiometricEnabled(): Promise<boolean> {
+
+    const { value } = await Preferences.get({ key: BIOMETRIC_ENABLED_KEY });
+
+    // defaults to enabled, matching existing behavior before this toggle existed
+    return value === null || value === undefined ? true : value === 'true';
+  }
+
+  async setBiometricEnabled(enabled: boolean): Promise<void> {
+
+    await Preferences.set({
+      key: BIOMETRIC_ENABLED_KEY,
+      value: String(enabled)
+    });
+  }
+
+  /** Checks device capability without prompting the user — lets Settings decide whether to even show the toggle. */
+  async isBiometricAvailable(): Promise<boolean> {
+
+    try {
+      const availability = await BiometricAuth.checkBiometry();
+      return availability.isAvailable;
+    } catch {
+      return false;
+    }
   }
 
   // 🔐 manual lock

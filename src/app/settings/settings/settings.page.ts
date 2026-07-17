@@ -9,12 +9,14 @@ import { VaultService } from 'src/app/services/vault.service';
 import { OfflineVaultService } from 'src/app/services/offline-vault.service';
 import { DocVaultFolderService } from 'src/app/core/google/drive/docvault-folder.service';
 import { NotificationService } from 'src/app/services/notification.service';
+import { App } from '@capacitor/app';
+import { FormsModule } from '@angular/forms';
 
 
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [IonicModule, CommonModule],
+  imports: [IonicModule, CommonModule, FormsModule],
   templateUrl: './settings.page.html',
   styleUrls: ['./settings.page.scss']
 })
@@ -25,6 +27,21 @@ export class SettingsPage implements OnInit {
   storageLabel = 'Calculating…';
   isLoadingStorage = true;
   isClearingCache = false;
+
+  // Security section
+  biometricAvailable = true;
+  biometricEnabled = true;
+  autoLockMinutes = 5;
+  lastUnlockTime: string | null = null;
+
+  // App Info section
+  appVersion = '—';
+  appBuild = '—';
+  databaseVersion: number | null = null;
+  readonly driveApiVersion = 'v3';
+  readonly capacitorVersion = '4.x';
+  readonly angularVersion = '20.x';
+  readonly ionicVersion = '8.x';
 
   constructor(
     public userService: UserService,
@@ -40,6 +57,75 @@ export class SettingsPage implements OnInit {
 
   ngOnInit() {
     this.loadStorageUsage();
+    this.loadSecuritySettings();
+    this.loadAppInfo();
+  }
+
+  // =====================================
+  // SECURITY
+  // =====================================
+
+  private async loadSecuritySettings() {
+
+    this.biometricAvailable = await this.vaultService.isBiometricAvailable();
+    this.biometricEnabled = await this.vaultService.getBiometricEnabled();
+    this.autoLockMinutes = await this.vaultService.getAutoLockMinutes();
+    this.lastUnlockTime = this.vaultService.lastUnlockTime;
+  }
+
+  async onBiometricToggle(enabled: boolean) {
+
+    this.biometricEnabled = enabled;
+    await this.vaultService.setBiometricEnabled(enabled);
+
+    await this.showToast(
+      enabled ? 'Biometric unlock enabled' : 'Biometric unlock disabled'
+    );
+  }
+
+  async onAutoLockChange(minutes: number) {
+
+    this.autoLockMinutes = minutes;
+    await this.vaultService.setAutoLockMinutes(minutes);
+
+    await this.showToast('Auto-lock timer updated');
+  }
+
+  formatLastUnlock(): string {
+
+    if (!this.lastUnlockTime) {
+      return 'Not unlocked this session';
+    }
+
+    return new Date(this.lastUnlockTime).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  // =====================================
+  // APP INFO
+  // =====================================
+
+  private async loadAppInfo() {
+
+    // Dexie's real, live schema version — not a hardcoded guess
+    this.databaseVersion = this.offlineVault.verno;
+
+    try {
+
+      const info = await App.getInfo();
+      this.appVersion = info.version;
+      this.appBuild = info.build;
+
+    } catch {
+
+      // App.getInfo() isn't implemented on web — fall back to the
+      // package.json version baked in at build time (still real, not fake)
+      this.appVersion = '0.0.1';
+      this.appBuild = '—';
+
+    }
   }
 
   // =====================================

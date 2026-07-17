@@ -50,6 +50,111 @@
       </ion-button>
     </div>
 
+    <!-- SECURITY -->
+    <div class="glass-card settings-section">
+      <div class="section-title">Security</div>
+
+      <ion-item lines="none" class="settings-item" *ngIf="biometricAvailable">
+        <ion-icon name="finger-print-outline" slot="start"></ion-icon>
+        <ion-label>Biometric Unlock</ion-label>
+        <ion-toggle
+          slot="end"
+          [checked]="biometricEnabled"
+          (ionChange)="onBiometricToggle($event.detail.checked)">
+        </ion-toggle>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="timer-outline" slot="start"></ion-icon>
+        <ion-label>Auto-Lock</ion-label>
+        <ion-select
+          slot="end"
+          interface="popover"
+          [value]="autoLockMinutes"
+          (ionChange)="onAutoLockChange($event.detail.value)">
+          <ion-select-option [value]="1">1 minute</ion-select-option>
+          <ion-select-option [value]="5">5 minutes</ion-select-option>
+          <ion-select-option [value]="15">15 minutes</ion-select-option>
+          <ion-select-option [value]="0">Never</ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="lock-closed-outline" slot="start"></ion-icon>
+        <ion-label>
+          Lock on Background
+          <p class="item-note">Always on — locks instantly when the app is backgrounded</p>
+        </ion-label>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="shield-checkmark-outline" slot="start"></ion-icon>
+        <ion-label>
+          Documents Require Vault Unlock
+          <p class="item-note">Always on — enforced by the app's route guards</p>
+        </ion-label>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="time-outline" slot="start"></ion-icon>
+        <ion-label>Last Unlock</ion-label>
+        <span slot="end" class="item-value">{{ formatLastUnlock() }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="key-outline" slot="start"></ion-icon>
+        <ion-label>Encryption</ion-label>
+        <span slot="end" class="item-value">AES-256</span>
+      </ion-item>
+    </div>
+
+    <!-- APP INFORMATION -->
+    <div class="glass-card settings-section">
+      <div class="section-title">App Information</div>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="information-circle-outline" slot="start"></ion-icon>
+        <ion-label>Version</ion-label>
+        <span slot="end" class="item-value">{{ appVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item" *ngIf="appBuild !== '—'">
+        <ion-icon name="build-outline" slot="start"></ion-icon>
+        <ion-label>Build</ion-label>
+        <span slot="end" class="item-value">{{ appBuild }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="server-outline" slot="start"></ion-icon>
+        <ion-label>Database Version</ion-label>
+        <span slot="end" class="item-value">{{ databaseVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="cloud-outline" slot="start"></ion-icon>
+        <ion-label>Google Drive API</ion-label>
+        <span slot="end" class="item-value">{{ driveApiVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="hardware-chip-outline" slot="start"></ion-icon>
+        <ion-label>Capacitor</ion-label>
+        <span slot="end" class="item-value">{{ capacitorVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="logo-angular" slot="start"></ion-icon>
+        <ion-label>Angular</ion-label>
+        <span slot="end" class="item-value">{{ angularVersion }}</span>
+      </ion-item>
+
+      <ion-item lines="none" class="settings-item">
+        <ion-icon name="apps-outline" slot="start"></ion-icon>
+        <ion-label>Ionic</ion-label>
+        <span slot="end" class="item-value">{{ ionicVersion }}</span>
+      </ion-item>
+    </div>
+
     <!-- ACCOUNT ACTIONS -->
     <div class="glass-card settings-section">
       <div class="section-title">Account</div>
