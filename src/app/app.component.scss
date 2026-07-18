@@ -1,4 +1,50 @@
 /* =========================================
+   OFFLINE INDICATOR
+========================================= */
+
+.offline-banner {
+
+  position: fixed;
+
+  top: 0;
+  left: 0;
+  right: 0;
+
+  z-index: 999998;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+
+  background: rgba(239, 68, 68, 0.92);
+  color: white;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  animation: slideDown 0.25s ease;
+
+  ion-icon {
+    font-size: 16px;
+  }
+}
+
+@keyframes slideDown {
+
+  from {
+    transform: translateY(-100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* =========================================
    VAULT LOCK SCREEN
 ========================================= */
 

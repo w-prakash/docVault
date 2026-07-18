@@ -191,6 +191,18 @@
 
 </ion-app>
 
+<!-- OFFLINE INDICATOR -->
+
+<div
+  class="offline-banner"
+  *ngIf="!isOnline">
+
+  <ion-icon name="cloud-offline-outline"></ion-icon>
+
+  <span>No internet connection — showing offline content</span>
+
+</div>
+
 <!-- VAULT LOCK SCREEN -->
 
 <div
