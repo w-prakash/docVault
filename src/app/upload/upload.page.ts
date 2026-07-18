@@ -422,18 +422,20 @@ async upload() {
       try {
 
         // 🔢 progress calculation
-        const startProgress =
-          Math.round((i / totalFiles) * 100);
-
-        const endProgress =
-          Math.round(((i + 1) / totalFiles) * 100);
+        // Each file owns an equal slice of the 0-100 bar (100 / totalFiles wide).
+        // fileFraction (0..1) tracks how far through THIS file's work we are;
+        // setProgress() scales it into that file's slice and clamps to 100,
+        // so it can never overshoot regardless of how many files there are.
+        const setProgress = (fileFraction: number) => {
+          const raw = ((i + fileFraction) / totalFiles) * 100;
+          this.uploadProgress = Math.min(100, Math.max(0, Math.round(raw)));
+        };
 
         // 🔐 ENCRYPT
         this.uploadMessage =
           `Encrypting ${file.name}`;
 
-        this.uploadProgress =
-          startProgress + 10;
+        setProgress(0.10);
 
         const buffer =
           await file.arrayBuffer();
@@ -671,8 +673,7 @@ if (!navigator.onLine) {
 
         this.notificationService.driveUploadStarted(file.name);
 
-        this.uploadProgress =
-          startProgress + 45;
+        setProgress(0.45);
 
         const folderId =
           await this.folderService.getFolderId();
@@ -696,8 +697,7 @@ if (!navigator.onLine) {
               }
             },
             (percent) => {
-              this.uploadProgress =
-                startProgress + 45 + Math.round(percent * 0.4);
+              setProgress(0.45 + Math.min(100, Math.max(0, percent)) / 100 * 0.40);
             }
           );
 
@@ -705,8 +705,7 @@ if (!navigator.onLine) {
         this.uploadMessage =
           `Saving ${file.name}`;
 
-        this.uploadProgress =
-          startProgress + 90;
+        setProgress(0.90);
 
         await this.offlineVault
           .saveLocalDocument({
@@ -725,8 +724,7 @@ if (!navigator.onLine) {
         this.notificationService.driveUploadCompleted(file.name);
 
         // ✅ file completed
-        this.uploadProgress =
-          endProgress;
+        setProgress(1);
 
       } catch (e) {
 

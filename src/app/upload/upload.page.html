@@ -219,14 +219,14 @@
 
       <div
         class="progress-fill"
-        [style.width.%]="uploadProgress">
+        [style.width.%]="uploadProgress > 100 ? 100 : (uploadProgress < 0 ? 0 : uploadProgress)">
 
       </div>
 
     </div>
 
     <div class="progress-text">
-      {{ uploadProgress }}%
+      {{ uploadProgress > 100 ? 100 : (uploadProgress < 0 ? 0 : uploadProgress) }}%
     </div>
 
   </div>
