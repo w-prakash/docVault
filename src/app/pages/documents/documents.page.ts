@@ -100,6 +100,12 @@ export class DocumentsPage implements OnDestroy {
 
   pendingDelete: DocumentItem | null = null;
   deleteTimeout: any;
+
+  // ── Multi-select (Google Photos style) ────────────────────────────────────
+  selectionMode = false;
+  selectedIds = new Set<number>();
+  private longPressTimer: any = null;
+  private longPressTriggered = false;
   // ── Private ────────────────────────────────────────────────────────────────
 
   /**
@@ -2091,39 +2097,48 @@ private async blobToBase64String(
 
   async finalDelete(doc: DocumentItem) {
     try {
-      // Always remove from Dexie first (works offline too)
-      await this.offlineVault.documents.delete(doc.id);
-
-      const serverId = doc.server_id || (doc as any).id;
-
-      if (!doc.local_only && serverId) {
-
-        if (navigator.onLine) {
-
-          try {
-            await this.driveService.deleteFile(serverId);
-          } catch (driveErr) {
-            // Drive delete failed (network blip, transient error) — queue it
-            // so the background sync worker (Phase 8) retries once online.
-            console.warn('⚠️ Live Drive delete failed, queuing for retry', driveErr);
-            await this.googleSyncService.queueDelete(serverId);
-          }
-
-        } else {
-
-          // Offline — queue the delete so it propagates once connectivity returns.
-          // Without this, a resync would re-download the "deleted" file from Drive
-          // since nothing ever told Drive to remove it.
-          await this.googleSyncService.queueDelete(serverId);
-        }
-      }
-
+      await this.removeDocumentEverywhere(doc);
       await this.showToast('Document deleted');
-      await this.notificationService.driveDeleteCompleted(doc.original_name || 'Document');
     } catch (err) {
       console.error('❌ Final delete error', err);
       await this.showToast('Delete failed — please try again', 'danger');
     }
+  }
+
+  /**
+   * The actual delete: Dexie + Drive (or queued for retry offline) + activity log.
+   * No toast here — finalDelete() and bulkDelete() each decide what to show
+   * (one toast per action, not one per document).
+   */
+  private async removeDocumentEverywhere(doc: DocumentItem): Promise<void> {
+    // Always remove from Dexie first (works offline too)
+    await this.offlineVault.documents.delete(doc.id);
+
+    const serverId = doc.server_id || (doc as any).id;
+
+    if (!doc.local_only && serverId) {
+
+      if (navigator.onLine) {
+
+        try {
+          await this.driveService.deleteFile(serverId);
+        } catch (driveErr) {
+          // Drive delete failed (network blip, transient error) — queue it
+          // so the background sync worker (Phase 8) retries once online.
+          console.warn('⚠️ Live Drive delete failed, queuing for retry', driveErr);
+          await this.googleSyncService.queueDelete(serverId);
+        }
+
+      } else {
+
+        // Offline — queue the delete so it propagates once connectivity returns.
+        // Without this, a resync would re-download the "deleted" file from Drive
+        // since nothing ever told Drive to remove it.
+        await this.googleSyncService.queueDelete(serverId);
+      }
+    }
+
+    await this.notificationService.driveDeleteCompleted(doc.original_name || 'Document');
   }
 
   undoDelete() {
@@ -2146,6 +2161,138 @@ private async blobToBase64String(
       buttons:  [{ text: 'Undo', handler: () => this.undoDelete() }],
     });
     await toast.present();
+  }
+
+  // ── Multi-select (Google Photos style) ────────────────────────────────────
+
+  get selectedCount(): number {
+    return this.selectedIds.size;
+  }
+
+  get allSelected(): boolean {
+    return this.documents.length > 0 && this.selectedIds.size === this.documents.length;
+  }
+
+  isSelected(doc: DocumentItem): boolean {
+    return this.selectedIds.has(doc.id);
+  }
+
+  /** Press-and-hold on a card enters selection mode and selects that card — mirrors Google Photos. */
+  startPress(doc: DocumentItem) {
+    this.longPressTriggered = false;
+    this.cancelPress();
+
+    this.longPressTimer = setTimeout(() => {
+      this.longPressTriggered = true;
+      this.enterSelectionMode();
+      this.toggleSelect(doc);
+    }, 450);
+  }
+
+  cancelPress() {
+    if (this.longPressTimer) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
+  }
+
+  /** Tapping a card while already selecting toggles it; a normal tap otherwise does nothing extra (view/download/share stay on their own buttons). */
+  onCardClick(doc: DocumentItem) {
+    // Suppress the click that immediately follows a long-press trigger,
+    // so the same gesture doesn't toggle the card twice.
+    if (this.longPressTriggered) {
+      this.longPressTriggered = false;
+      return;
+    }
+
+    if (this.selectionMode) {
+      this.toggleSelect(doc);
+    }
+  }
+
+  enterSelectionMode() {
+    this.selectionMode = true;
+  }
+
+  exitSelectionMode() {
+    this.selectionMode = false;
+    this.selectedIds.clear();
+  }
+
+  toggleSelect(doc: DocumentItem) {
+    if (this.selectedIds.has(doc.id)) {
+      this.selectedIds.delete(doc.id);
+      if (this.selectedIds.size === 0) {
+        this.selectionMode = false;
+      }
+    } else {
+      this.selectedIds.add(doc.id);
+    }
+  }
+
+  toggleSelectAll() {
+    if (this.allSelected) {
+      this.selectedIds.clear();
+    } else {
+      this.selectedIds = new Set(this.documents.map(d => d.id));
+    }
+  }
+
+  async confirmBulkDelete() {
+
+    const count = this.selectedIds.size;
+
+    if (count === 0) {
+      return;
+    }
+
+    const alert = await this.alertCtrl.create({
+      header: `Delete ${count} document${count === 1 ? '' : 's'}?`,
+      message: `This will permanently delete the selected document${count === 1 ? '' : 's'} from your vault and Google Drive. This can't be undone.`,
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        { text: 'Delete', role: 'destructive', handler: () => this.bulkDelete() },
+      ],
+    });
+
+    await alert.present();
+  }
+
+  async bulkDelete() {
+
+    const docsToDelete = this.allDocuments.filter(d => this.selectedIds.has(d.id));
+    const count = docsToDelete.length;
+
+    if (count === 0) {
+      return;
+    }
+
+    // Remove from the UI immediately for instant feedback
+    const idsToDelete = new Set(docsToDelete.map(d => d.id));
+    this.allDocuments = this.allDocuments.filter(d => !idsToDelete.has(d.id));
+    this.applyFilters();
+
+    this.exitSelectionMode();
+
+    let failCount = 0;
+
+    for (const doc of docsToDelete) {
+      try {
+        await this.removeDocumentEverywhere(doc);
+      } catch (e) {
+        console.error('❌ Bulk delete failed for doc', doc.id, e);
+        failCount++;
+      }
+    }
+
+    if (failCount === 0) {
+      await this.showToast(`${count} document${count === 1 ? '' : 's'} deleted`);
+    } else {
+      await this.showToast(
+        `${count - failCount} of ${count} documents deleted — ${failCount} failed`,
+        'warning'
+      );
+    }
   }
 
   // ── Decrypted blob ─────────────────────────────────────────────────────────

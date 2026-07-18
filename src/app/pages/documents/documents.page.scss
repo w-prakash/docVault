@@ -40,6 +40,68 @@
   }
 }
 
+.header-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.select-mode-btn {
+  --color: #60a5fa;
+  align-self: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ======================================================
+   SELECTION TOOLBAR (multi-select, Google Photos style)
+====================================================== */
+
+.selection-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 16px 12px 14px 20px;
+
+  background: rgba(59,130,246,0.12);
+  border-bottom: 1px solid rgba(59,130,246,0.25);
+
+  position: sticky;
+  top: 0;
+  z-index: 110;
+}
+
+.close-select-btn {
+  --color: white;
+  flex: 0 0 auto;
+}
+
+.selection-count {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+}
+
+.selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.select-all-btn {
+  --color: #93c5fd;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.delete-selected-btn {
+  --color: #ff8a8a;
+}
+
 .back-btn {
   --color: white;
 
@@ -237,6 +299,56 @@ ion-searchbar {
 
 .file-card:active {
   transform: scale(0.97);
+}
+
+.file-card.selection-mode {
+  cursor: pointer;
+}
+
+.file-card.selected {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.25), 0 10px 30px rgba(0,0,0,0.22);
+}
+
+.file-card.selection-mode .thumb {
+  opacity: 0.92;
+}
+
+.file-card.selected .thumb {
+  opacity: 1;
+}
+
+.select-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 30;
+
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(6px);
+
+  ion-icon {
+    font-size: 24px;
+    color: white;
+  }
+}
+
+.file-card.selected .select-checkbox {
+  background: transparent;
+
+  ion-icon {
+    color: #3b82f6;
+    filter: drop-shadow(0 0 3px rgba(0,0,0,0.6));
+  }
 }
 
 /* ======================================================

@@ -85,16 +85,49 @@
 
 </div>
   <!-- Header -->
-<div class="header">
+<div class="header" *ngIf="!selectionMode">
   <div class="header-top">
     <ion-button fill="clear" class="back-btn" (click)="goBack()">
       <ion-icon name="arrow-back"></ion-icon>
     </ion-button>
 
-    <div>
+    <div class="header-titles">
       <h2>My Documents</h2>
       <p>Your secure files</p>
     </div>
+
+    <!-- <ion-button
+      fill="clear"
+      class="select-mode-btn"
+      *ngIf="documents.length"
+      (click)="enterSelectionMode()">
+      Select
+    </ion-button> -->
+  </div>
+
+</div>
+
+<!-- SELECTION TOOLBAR -->
+<div class="selection-header" *ngIf="selectionMode">
+
+  <ion-button fill="clear" class="close-select-btn" (click)="exitSelectionMode()">
+    <ion-icon name="close-outline" slot="icon-only"></ion-icon>
+  </ion-button>
+
+  <span class="selection-count">{{ selectedCount }} selected</span>
+
+  <div class="selection-actions">
+    <ion-button fill="clear" class="select-all-btn" (click)="toggleSelectAll()">
+      {{ allSelected ? 'Deselect All' : 'Select All' }}
+    </ion-button>
+
+    <ion-button
+      fill="clear"
+      class="delete-selected-btn"
+      [disabled]="selectedCount === 0"
+      (click)="confirmBulkDelete()">
+      <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+    </ion-button>
   </div>
 
 </div>
@@ -214,30 +247,47 @@
   <ng-container   *ngIf="
     documents.length > 0
   ">
-    <div class="file-card" *ngFor="let doc of documents"  [class.restoring]="doc.isRestoring"  [class.deleting]="doc.isDeleting">
+    <div
+      class="file-card"
+      *ngFor="let doc of documents"
+      [class.restoring]="doc.isRestoring"
+      [class.deleting]="doc.isDeleting"
+      [class.selection-mode]="selectionMode"
+      [class.selected]="isSelected(doc)"
+      (pointerdown)="startPress(doc)"
+      (pointerup)="cancelPress()"
+      (pointerleave)="cancelPress()"
+      (pointermove)="cancelPress()"
+      (click)="onCardClick(doc)">
 
 <div class="thumb">
 <div class="download-progress-overlay" *ngIf="doc.isDownloading">
   <ion-spinner name="crescent"></ion-spinner>
   <span *ngIf="doc.downloadProgress">{{ doc.downloadProgress }}%</span>
 </div>
-<div class="overlay-actions">
 
-  <ion-button fill="clear" (click)="viewDoc(doc)">
+<!-- SELECTION CHECKMARK -->
+<div class="select-checkbox" *ngIf="selectionMode" (click)="$event.stopPropagation(); toggleSelect(doc)">
+  <ion-icon [name]="isSelected(doc) ? 'checkmark-circle' : 'ellipse-outline'"></ion-icon>
+</div>
+
+<div class="overlay-actions" *ngIf="!selectionMode">
+
+  <ion-button fill="clear" (click)="$event.stopPropagation(); viewDoc(doc)">
     <ion-icon name="eye-outline"></ion-icon>
   </ion-button>
 
-  <ion-button fill="clear" (click)="downloadDoc(doc)">
+  <ion-button fill="clear" (click)="$event.stopPropagation(); downloadDoc(doc)">
     <ion-icon name="download-outline"></ion-icon>
   </ion-button>
 
-  <ion-button fill="clear" (click)="shareDoc(doc)">
+  <ion-button fill="clear" (click)="$event.stopPropagation(); shareDoc(doc)">
     <ion-icon name="share-social-outline"></ion-icon>
   </ion-button>
 
 </div>
-  <div class="top-bar">
-    <ion-button fill="clear" (click)="openMenu(doc)">
+  <div class="top-bar" *ngIf="!selectionMode">
+    <ion-button fill="clear" (click)="$event.stopPropagation(); openMenu(doc)">
       <ion-icon name="ellipsis-vertical"></ion-icon>
     </ion-button>
   </div>

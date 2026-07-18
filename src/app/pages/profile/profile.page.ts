@@ -109,6 +109,10 @@ export class ProfilePage implements OnInit, OnDestroy {
     this.location.back();
   }
 
+  goToEditProfile() {
+    this.router.navigateByUrl('/edit-profile');
+  }
+
   async openNotifications() {
     const modal = await this.modalCtrl.create({
       component: NotificationCenterComponent,
@@ -295,8 +299,4 @@ export class ProfilePage implements OnInit, OnDestroy {
 
     this.router.navigateByUrl('/login', { replaceUrl: true });
   }
-  
-  editProfile(): void {
-  this.router.navigateByUrl('/edit-profile');
-}
 }
