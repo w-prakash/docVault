@@ -481,6 +481,8 @@ ion-select::part(icon) {
 
 .pdf-preview {
 
+  position: relative;
+
   width: 100%;
   height: 100%;
 
@@ -505,9 +507,28 @@ border-radius: 1rem;
   padding: 10px;
 
   text-align: center;
+
+  overflow: hidden;
 }
 
-/* ICON */
+/* ACTUAL FIRST-PAGE THUMBNAIL */
+
+.pdf-thumb-img {
+
+  position: absolute;
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+
+  border-radius: 1rem;
+
+  background: #fff;
+}
+
+/* ICON (shown only while the thumbnail is still being generated) */
 
 .pdf-preview ion-icon {
 
@@ -516,15 +537,34 @@ border-radius: 1rem;
   flex-shrink: 0;
 }
 
-/* TEXT */
+/* BADGE */
 
-.pdf-preview span {
+.pdf-badge {
 
-  font-size: 11px;
+  position: relative;
+  z-index: 1;
 
-  font-weight: 600;
+  font-size: 10px;
+
+  font-weight: 700;
 
   line-height: 1.2;
+
+  letter-spacing: 0.3px;
+}
+
+.pdf-thumb-img ~ .pdf-badge {
+
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+
+  padding: 2px 7px;
+
+  border-radius: 6px;
 }
 
 /* REMOVE */

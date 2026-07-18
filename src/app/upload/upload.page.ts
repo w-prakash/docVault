@@ -92,9 +92,16 @@ uploadMessage = '';
     const { files, previews } = this.scannerHandoff.consume();
 
     for (let i = 0; i < files.length; i++) {
-      this.files.push(files[i]);
-      this.selectedFileNames.push(files[i].name);
-      this.selectedFilesPreview.push(previews[i]);
+      const file = files[i];
+      const preview: any = { ...previews[i], thumbnailUrl: undefined };
+
+      this.files.push(file);
+      this.selectedFileNames.push(file.name);
+      this.selectedFilesPreview.push(preview);
+
+      if (file.type === 'application/pdf') {
+        this.queuePdfPreviewThumbnail(preview);
+      }
     }
   }
 
@@ -308,14 +315,32 @@ onFilesSelected(event: any) {
     this.selectedFileNames.push(file.name);
 
     // 🔥 preview object
-    this.selectedFilesPreview.push({
+    const preview = {
 
       name: file.name,
 
       type: file.type,
 
-      url: URL.createObjectURL(file)
-    });
+      url: URL.createObjectURL(file),
+
+      thumbnailUrl: undefined as string | undefined
+    };
+
+    this.selectedFilesPreview.push(preview);
+
+    if (file.type === 'application/pdf') {
+      this.queuePdfPreviewThumbnail(preview);
+    }
+  }
+}
+
+// 🖼 Render the PDF's first page into the preview card instead of a generic icon
+private async queuePdfPreviewThumbnail(preview: { url: string; thumbnailUrl?: string }) {
+
+  try {
+    preview.thumbnailUrl = await this.generatePdfThumbnail(preview.url);
+  } catch (e) {
+    console.error('❌ PDF preview thumbnail failed', e);
   }
 }
 

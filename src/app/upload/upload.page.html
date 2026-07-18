@@ -136,11 +136,18 @@
       *ngIf="file.type.includes('pdf')"
       (click)="openLocalPreview(file)">
 
+      <img
+        *ngIf="file.thumbnailUrl"
+        class="pdf-thumb-img"
+        [src]="file.thumbnailUrl"
+        alt="PDF preview">
+
       <ion-icon
+        *ngIf="!file.thumbnailUrl"
         name="document-outline">
       </ion-icon>
 
-      <span>PDF</span>
+      <span class="pdf-badge">PDF</span>
 
     </div>
 
