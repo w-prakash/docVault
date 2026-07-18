@@ -1,0 +1,131 @@
+<ion-header class="app-header">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+
+    <ion-title>Edit Profile</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="app-bg edit-profile-bg">
+
+  <div class="page-container" *ngIf="userService.profile$ | async as profile">
+
+    <!-- ===================================================
+         EDITABLE SECTION (top)
+    ==================================================== -->
+
+    <div class="glass-card edit-card">
+
+      <div class="section-title">Edit Photo &amp; Name</div>
+
+      <div class="avatar-section">
+
+        <div class="avatar-wrap">
+          <img
+            *ngIf="profile.photoUrl && !avatarError"
+            [src]="profile.photoUrl"
+            class="edit-avatar"
+            alt="Profile"
+            referrerpolicy="no-referrer"
+            (error)="avatarError = true">
+          <div *ngIf="!profile.photoUrl || avatarError" class="edit-avatar edit-avatar-fallback">
+            {{ profile.displayName?.charAt(0) }}
+          </div>
+
+          <button class="avatar-camera-btn" (click)="changePhoto()">
+            <ion-icon name="camera"></ion-icon>
+          </button>
+        </div>
+
+        <button class="change-photo-link" (click)="changePhoto()">Change Photo</button>
+
+        <p class="avatar-note" *ngIf="hasAvatarOverride">
+          <ion-icon name="information-circle-outline"></ion-icon>
+          Custom photo, stored only on this device
+        </p>
+
+      </div>
+
+      <div class="name-field">
+        <ion-label class="field-label" for="nameInput">Display Name</ion-label>
+
+        <div class="name-input-row">
+          <input
+            id="nameInput"
+            type="text"
+            [(ngModel)]="editedName"
+            placeholder="Your name"
+            maxlength="60"
+            autocomplete="off">
+        </div>
+
+        <div class="name-actions">
+          <button
+            class="reset-link"
+            *ngIf="hasNicknameOverride"
+            (click)="resetName()">
+            Reset to Google name
+          </button>
+
+          <ion-button
+            class="save-name-btn"
+            size="small"
+            [disabled]="!nameChanged || isSavingName"
+            (click)="saveName()">
+            <ion-spinner *ngIf="isSavingName" name="crescent" slot="start"></ion-spinner>
+            {{ isSavingName ? 'Saving…' : 'Save Name' }}
+          </ion-button>
+        </div>
+
+        <p class="name-hint" *ngIf="hasNicknameOverride">
+          <ion-icon name="information-circle-outline"></ion-icon>
+          Custom name, stored only on this device
+        </p>
+      </div>
+
+    </div>
+
+    <!-- ===================================================
+         ORIGINAL GOOGLE ACCOUNT (read-only, below)
+    ==================================================== -->
+
+    <div class="glass-card original-card" *ngIf="originalUser">
+
+      <div class="section-title">Original Google Account</div>
+
+      <div class="original-row">
+
+        <img
+          *ngIf="originalUser.imageUrl && !originalAvatarError"
+          [src]="originalUser.imageUrl"
+          class="original-avatar"
+          alt="Google account photo"
+          referrerpolicy="no-referrer"
+          (error)="originalAvatarError = true">
+        <div *ngIf="!originalUser.imageUrl || originalAvatarError" class="original-avatar original-avatar-fallback">
+          {{ originalUser.displayName?.charAt(0) }}
+        </div>
+
+        <div class="original-copy">
+          <h5>{{ originalUser.displayName }}</h5>
+          <p>{{ originalUser.email }}</p>
+        </div>
+
+      </div>
+
+      <div class="synced-note">
+        <ion-icon name="logo-google"></ion-icon>
+        This is exactly what's on your Google account. Your edits above are
+        stored only on this device and never change it — you can go back to
+        it any time with Reset.
+      </div>
+
+    </div>
+
+  </div>
+
+</ion-content>

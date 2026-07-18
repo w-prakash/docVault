@@ -5,6 +5,7 @@ import { VaultUnlockComponent } from '../components/vault-unlock/vault-unlock.co
 // import { SupabaseService } from './supabase.service';
 import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
 import { Preferences } from '@capacitor/preferences';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 import { NotificationService } from './notification.service';
 const AUTO_LOCK_MINUTES_KEY = 'vault_auto_lock_minutes';
@@ -365,6 +366,118 @@ async validatePassword(password: string): Promise<string | null> {
   }
 }
 
+// =====================================
+// CHANGE VAULT PASSWORD
+//
+// Scope, by design: this re-keys the vault password and re-encrypts every
+// file already cached on THIS device (the 'vault' + 'thumbnails'
+// directories) — that's the full set of ciphertext this app can safely
+// touch offline, in one pass, with no risk of leaving Drive-only content
+// half-migrated. Documents that only exist in Google Drive (never opened
+// on this device) are still under the old password; re-download and
+// reopen them after changing your password and DocVault will re-cache
+// them under the new key automatically. The new salt/check are only
+// persisted after every local file has been re-encrypted successfully —
+// if anything fails partway, nothing is committed and the old password
+// keeps working.
+// =====================================
+
+async changeVaultPassword(
+  currentPassword: string,
+  newPassword: string,
+  onProgress?: (done: number, total: number) => void
+): Promise<{ success: boolean; error?: string; reencryptedCount: number }> {
+
+  const oldKey = await this.validatePassword(currentPassword);
+
+  if (!oldKey) {
+    return { success: false, error: 'Current password is incorrect', reencryptedCount: 0 };
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, error: 'New password must be at least 6 characters', reencryptedCount: 0 };
+  }
+
+  // ---- collect every locally cached ciphertext file ----
+  const targets: { dir: 'vault' | 'thumbnails'; name: string }[] = [];
+
+  for (const dir of ['vault', 'thumbnails'] as const) {
+    try {
+      const listing = await Filesystem.readdir({ path: dir, directory: Directory.Data });
+      for (const file of listing.files) {
+        if (file.type === 'file') {
+          targets.push({ dir, name: file.name });
+        }
+      }
+    } catch {
+      // directory doesn't exist yet — nothing cached there, that's fine
+    }
+  }
+
+  const newSalt = CryptoJS.lib.WordArray.random(128 / 8).toString();
+  const newKey = this.deriveKey(newPassword, newSalt);
+
+  // ---- pass 1: decrypt with old key + re-encrypt with new key, fully in memory ----
+  // Nothing on disk changes here, so a failure partway through leaves the
+  // vault completely untouched — still unlockable with the old password.
+  const reencrypted: { dir: string; name: string; data: string }[] = [];
+
+  for (let i = 0; i < targets.length; i++) {
+
+    const target = targets[i];
+
+    try {
+      const read = await Filesystem.readFile({
+        path: `${target.dir}/${target.name}`,
+        directory: Directory.Data
+      });
+
+      const ciphertext = typeof read.data === 'string' ? read.data : await this.blobToText(read.data as Blob);
+
+      const plaintextWords = CryptoJS.AES.decrypt(ciphertext, oldKey);
+      const newCiphertext = CryptoJS.AES.encrypt(plaintextWords, newKey).toString();
+
+      reencrypted.push({ dir: target.dir, name: target.name, data: newCiphertext });
+
+    } catch (e) {
+      console.error('❌ Failed to re-encrypt cached file during password change', target.name, e);
+      return { success: false, error: 'Could not re-encrypt a locally cached file — nothing was changed', reencryptedCount: 0 };
+    }
+
+    onProgress?.(i + 1, targets.length);
+  }
+
+  // ---- pass 2: write the re-encrypted files back to disk ----
+  for (const file of reencrypted) {
+    await Filesystem.writeFile({
+      path: `${file.dir}/${file.name}`,
+      data: file.data,
+      directory: Directory.Data,
+      recursive: true
+    });
+  }
+
+  // ---- commit the new password only now that every local file is safe ----
+  const newVaultCheck = CryptoJS.AES.encrypt('vault-check', newKey).toString();
+  await this.saveVaultMeta(newSalt, newVaultCheck);
+
+  this.vaultKey = newKey;
+  this.lastUnlockTime = new Date().toISOString();
+
+  await this.notificationService.vaultPasswordChanged();
+
+  return { success: true, reencryptedCount: reencrypted.length };
+}
+
+private blobToText(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsText(blob);
+  });
+}
+
 async ensureVault(): Promise<void> {
 
   const existing = await this.getLocalVaultMeta();
@@ -394,7 +507,12 @@ private async openUnlockModal(mode: 'unlock' | 'create' = 'unlock'): Promise<str
 
   const modal = await this.modalCtrl.create({
     component: VaultUnlockComponent,
-    componentProps: { mode }
+    componentProps: {
+      mode,
+      // 'create' mode has nothing to validate against yet — only wire
+      // this up for 'unlock', where a wrong password is a real case.
+      ...(mode === 'unlock' ? { validate: (password: string) => this.validatePassword(password) } : {})
+    }
   });
 
   await modal.present();

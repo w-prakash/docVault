@@ -1,0 +1,70 @@
+<ion-header class="app-header">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+
+    <ion-title>Activity Log</ion-title>
+
+    <ion-buttons slot="end">
+      <ion-button fill="clear" class="clear-btn" (click)="clearAll()" *ngIf="allActivity.length">
+        <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <div class="filter-row">
+    <button
+      class="filter-chip"
+      *ngFor="let f of filters"
+      [class.filter-chip--active]="activeFilter === f.key"
+      (click)="setFilter(f.key)">
+      {{ f.label }}
+    </button>
+  </div>
+</ion-header>
+
+<ion-content class="app-bg activity-bg">
+
+  <div class="page-container">
+
+    <div class="activity-groups" *ngIf="groups.length; else emptyState">
+
+      <div class="activity-group" *ngFor="let group of groups">
+
+        <div class="group-label">{{ group.label }}</div>
+
+        <div
+          class="activity-card"
+          *ngFor="let item of group.items; trackBy: trackById">
+
+          <div class="activity-icon" [ngClass]="'activity-icon--' + item.color">
+            <ion-icon [name]="item.icon"></ion-icon>
+          </div>
+
+          <div class="activity-copy">
+            <div class="activity-top">
+              <h5>{{ item.title }}</h5>
+              <span class="activity-time">{{ item.timestamp | relativeTime }}</span>
+            </div>
+            <p>{{ item.message }}</p>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <ng-template #emptyState>
+      <div class="activity-empty">
+        <ion-icon name="time-outline"></ion-icon>
+        <p>No activity recorded yet</p>
+      </div>
+    </ng-template>
+
+  </div>
+
+</ion-content>

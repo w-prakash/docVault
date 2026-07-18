@@ -32,6 +32,7 @@ export type NotificationType =
   // security
   | 'vault-locked'
   | 'vault-unlocked'
+  | 'vault-password-changed'
   // storage
   | 'storage-almost-full'
   | 'storage-cache-cleared';

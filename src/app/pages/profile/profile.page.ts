@@ -227,13 +227,13 @@ export class ProfilePage implements OnInit, OnDestroy {
         icon: 'person-outline',
         label: 'Edit Profile',
         colorClass: 'qa--green',
-        action: () => this.comingSoon('Edit Profile')
+        action: () => this.router.navigateByUrl('/edit-profile')
       },
       {
         icon: 'lock-closed-outline',
         label: 'Change Password',
         colorClass: 'qa--blue',
-        action: () => this.comingSoon('Change Password')
+        action: () => this.router.navigateByUrl('/change-password')
       },
       {
         icon: 'shield-checkmark-outline',
@@ -245,13 +245,13 @@ export class ProfilePage implements OnInit, OnDestroy {
         icon: 'phone-portrait-outline',
         label: 'Manage Devices',
         colorClass: 'qa--orange',
-        action: () => this.comingSoon('Manage Devices')
+        action: () => this.router.navigateByUrl('/manage-devices')
       },
       {
         icon: 'time-outline',
         label: 'Activity Log',
         colorClass: 'qa--cyan',
-        action: () => this.comingSoon('Activity Log')
+        action: () => this.router.navigateByUrl('/activity-log')
       }
     ];
   }
@@ -295,4 +295,8 @@ export class ProfilePage implements OnInit, OnDestroy {
 
     this.router.navigateByUrl('/login', { replaceUrl: true });
   }
+  
+  editProfile(): void {
+  this.router.navigateByUrl('/edit-profile');
+}
 }

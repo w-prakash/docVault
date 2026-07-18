@@ -392,6 +392,17 @@ export class NotificationService {
     });
   }
 
+  vaultPasswordChanged(): Promise<void> {
+    return this.notify({
+      type: 'vault-password-changed',
+      category: 'security',
+      title: 'Vault password changed',
+      message: 'Your vault password was changed and locally cached files were re-encrypted.',
+      icon: 'key-outline',
+      color: 'green'
+    });
+  }
+
   // ---- Storage ----
 
   storageAlmostFull(percentUsed: number): Promise<void> {

@@ -58,6 +58,30 @@ const routes: Routes = [
     import('./pages/profile/profile.page').then((m) => m.ProfilePage),
   },
   {
+    path: 'edit-profile',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+    import('./pages/edit-profile/edit-profile.page').then((m) => m.EditProfilePage),
+  },
+  {
+    path: 'change-password',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+    import('./pages/change-password/change-password.page').then((m) => m.ChangePasswordPage),
+  },
+  {
+    path: 'manage-devices',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+    import('./pages/manage-devices/manage-devices.page').then((m) => m.ManageDevicesPage),
+  },
+  {
+    path: 'activity-log',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+    import('./pages/activity-log/activity-log.page').then((m) => m.ActivityLogPage),
+  },
+  {
     path: 'reports',
     canActivate: [AuthGuard],
     loadComponent: () =>

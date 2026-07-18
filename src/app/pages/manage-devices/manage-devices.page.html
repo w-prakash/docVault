@@ -1,0 +1,117 @@
+<ion-header class="app-header">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+
+    <ion-title>Manage Devices</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="app-bg devices-bg">
+
+  <div class="page-container">
+
+    <!-- THIS DEVICE -->
+    <div class="glass-card device-card">
+
+      <div class="device-top">
+        <div class="device-icon">
+          <ion-icon name="phone-portrait-outline"></ion-icon>
+        </div>
+        <div class="device-copy">
+          <h3>{{ platformLabel }}</h3>
+          <p>{{ browserLabel }} &bull; This device</p>
+        </div>
+        <span class="active-pill">
+          <span class="active-dot"></span>
+          Active
+        </span>
+      </div>
+
+      <div class="device-stats">
+
+        <div class="device-stat">
+          <ion-icon name="document-text-outline"></ion-icon>
+          <div>
+            <h5>{{ documentCount }}</h5>
+            <p>Documents</p>
+          </div>
+        </div>
+
+        <div class="device-stat">
+          <ion-icon [name]="isOnline ? 'cloud-done-outline' : 'cloud-offline-outline'"></ion-icon>
+          <div>
+            <h5>{{ isOnline ? 'Online' : 'Offline' }}</h5>
+            <p>Connection</p>
+          </div>
+        </div>
+
+        <div class="device-stat">
+          <ion-icon name="apps-outline"></ion-icon>
+          <div>
+            <h5>v{{ appVersion }}</h5>
+            <p>App version</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- SECURITY -->
+    <div class="glass-card security-card">
+
+      <div class="section-title">Security on this device</div>
+
+      <div class="info-row">
+        <ion-icon name="finger-print-outline"></ion-icon>
+        <div class="info-copy">
+          <h5>Biometric Unlock</h5>
+          <p>{{ biometricAvailable ? (biometricEnabled ? 'Enabled' : 'Available, but off') : 'Not available on this device' }}</p>
+        </div>
+      </div>
+
+      <div class="info-row">
+        <ion-icon name="timer-outline"></ion-icon>
+        <div class="info-copy">
+          <h5>Auto-Lock</h5>
+          <p>{{ autoLockMinutes === 0 ? 'Never' : (autoLockMinutes + ' minute' + (autoLockMinutes === 1 ? '' : 's')) }}</p>
+        </div>
+      </div>
+
+      <div class="info-row">
+        <ion-icon name="time-outline"></ion-icon>
+        <div class="info-copy">
+          <h5>Last Unlock</h5>
+          <p>{{ formatLastUnlock() }}</p>
+        </div>
+      </div>
+
+      <div class="info-row">
+        <ion-icon name="key-outline"></ion-icon>
+        <div class="info-copy">
+          <h5>Encryption</h5>
+          <p>AES-256, keys never leave this device</p>
+        </div>
+      </div>
+
+    </div>
+
+    <ion-button expand="block" fill="outline" class="lock-btn" (click)="lockThisDevice()">
+      <ion-icon name="lock-closed-outline" slot="start"></ion-icon>
+      Lock This Device Now
+    </ion-button>
+
+    <p class="scope-note">
+      <ion-icon name="information-circle-outline"></ion-icon>
+      DocVault protects each device independently — there's no shared
+      device list, so signing out or resetting the vault only affects
+      the device you're using.
+    </p>
+
+  </div>
+
+</ion-content>
