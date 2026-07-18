@@ -17,6 +17,7 @@ import {
 } from '@angular/platform-browser';
 import { OfflineVaultService } from '../services/offline-vault.service';
 import { NotificationService } from '../services/notification.service';
+import { ScannerHandoffService } from 'src/app/scanner/services/scanner-handoff.service';
 import * as pdfjsLib from 'pdfjs-dist';
 (pdfjsLib as any)
   .GlobalWorkerOptions
@@ -65,7 +66,8 @@ uploadMessage = '';
     private driveService: GoogleDriveService,
     private folderService: DocVaultFolderService,
     private referenceDataService: ReferenceDataService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private scannerHandoff: ScannerHandoffService
 
   ) {
       console.log(
@@ -77,6 +79,23 @@ uploadMessage = '';
   async ngOnInit() {
     await this.loadMembers();
     await this.loadCategories();
+    this.consumeScannedFiles();
+  }
+
+  // 📄 Pull in files handed off from the Document Scanner (if any) —
+  // same code path as picking files from the Gallery, just pre-populated.
+  private consumeScannedFiles() {
+    if (!this.scannerHandoff.hasPending()) {
+      return;
+    }
+
+    const { files, previews } = this.scannerHandoff.consume();
+
+    for (let i = 0; i < files.length; i++) {
+      this.files.push(files[i]);
+      this.selectedFileNames.push(files[i].name);
+      this.selectedFilesPreview.push(previews[i]);
+    }
   }
 
 async loadMembers() {

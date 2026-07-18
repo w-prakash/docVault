@@ -37,6 +37,12 @@ const routes: Routes = [
     import('./upload/upload.page').then((m) => m.UploadPage),
   },
   {
+    path: 'scanner',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+    import('./scanner/scanner.page').then((m) => m.ScannerPage),
+  },
+  {
     path: 'documents',
     canActivate: [
     AuthGuard,

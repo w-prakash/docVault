@@ -1,0 +1,15 @@
+<div class="filter-strip">
+  <div
+    *ngFor="let f of filters"
+    class="filter-chip"
+    [class.filter-chip--active]="selected === f.id"
+    (click)="choose(f.id)">
+
+    <div class="filter-thumb">
+      <img *ngIf="thumbnailUrl" [src]="thumbnailUrl" [ngClass]="'thumb-preview--' + f.id" alt="" />
+      <ion-icon *ngIf="!thumbnailUrl" [name]="f.icon"></ion-icon>
+    </div>
+
+    <span class="filter-label">{{ f.label }}</span>
+  </div>
+</div>

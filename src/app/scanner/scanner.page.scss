@@ -1,0 +1,387 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.scanner-content {
+  --background: #05070d;
+  --color: var(--text-primary, #f8fafc);
+}
+
+// =====================================================================
+// TOP BAR
+// =====================================================================
+
+.scanner-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: max(12px, env(safe-area-inset-top)) 8px 12px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
+}
+
+.scanner-title {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.topbar-btn {
+  --color: #fff;
+  font-size: 22px;
+}
+
+.topbar-btn--accent {
+  --color: var(--accent, #3b82f6);
+  font-weight: 700;
+}
+
+.topbar-spacer {
+  width: 44px;
+}
+
+// =====================================================================
+// SHARED: GLASS CARD / BUTTON
+// =====================================================================
+
+.glass-card {
+  background: var(--card-bg, rgba(255,255,255,0.08));
+  backdrop-filter: var(--blur, blur(14px));
+  -webkit-backdrop-filter: var(--blur, blur(14px));
+  border: 1px solid var(--card-border, rgba(255,255,255,0.08));
+  border-radius: var(--radius-lg, 24px);
+  box-shadow: var(--shadow, 0 10px 30px rgba(0,0,0,0.25));
+}
+
+.glass-btn {
+  --background: var(--card-bg, rgba(255,255,255,0.1));
+  --background-hover: rgba(255,255,255,0.16);
+  --border-radius: var(--radius-md, 18px);
+  --color: #fff;
+  --box-shadow: none;
+  backdrop-filter: blur(10px);
+  font-weight: 600;
+}
+
+.glass-btn--primary {
+  --background: var(--accent, #3b82f6);
+  --background-hover: #2f6fe0;
+  --color: #fff;
+  box-shadow: 0 8px 24px rgba(59,130,246,0.35);
+}
+
+.footer-btn {
+  --color: rgba(255,255,255,0.75);
+}
+
+// =====================================================================
+// STEP: CAPTURE
+// =====================================================================
+
+.step-capture {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 90px 20px 28px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(59,130,246,0.12), transparent 60%),
+    #05070d;
+}
+
+.capture-frame {
+  flex: 1;
+  margin: 12px 4px;
+  border-radius: 28px;
+  background: rgba(255,255,255,0.03);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.capture-border {
+  position: absolute;
+  inset: 24px;
+  border: 2.5px dashed rgba(59,130,246,0.55);
+  border-radius: 22px;
+  animation: border-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes border-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(59,130,246,0); border-color: rgba(59,130,246,0.35); }
+  50% { box-shadow: 0 0 24px rgba(59,130,246,0.25); border-color: rgba(59,130,246,0.75); }
+}
+
+.capture-icon {
+  font-size: 56px;
+  color: rgba(255,255,255,0.35);
+  z-index: 1;
+}
+
+.capture-hint {
+  margin-top: 14px;
+  color: rgba(255,255,255,0.55);
+  font-size: 13.5px;
+  z-index: 1;
+}
+
+.capture-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 16px 8px;
+}
+
+.capture-secondary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.75);
+  font-size: 11px;
+
+  ion-icon {
+    font-size: 22px;
+  }
+}
+
+.capture-shutter {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid rgba(255,255,255,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease;
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+.shutter-ring {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid #05070d;
+  background: #fff;
+}
+
+.capture-existing {
+  margin-top: 8px;
+
+  ion-button {
+    margin-top: 8px;
+  }
+}
+
+// =====================================================================
+// STEP: CROP
+// =====================================================================
+
+.step-crop {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #05070d;
+}
+
+.crop-stage {
+  flex: 1;
+  padding-top: 70px;
+}
+
+.crop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px max(14px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+}
+
+// =====================================================================
+// STEP: ENHANCE
+// =====================================================================
+
+.step-enhance {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #05070d;
+}
+
+.enhance-stage {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 70px 16px 12px;
+}
+
+.enhance-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+.enhance-quick-actions {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quick-action {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  ion-icon {
+    font-size: 19px;
+  }
+
+  &--active {
+    background: var(--accent, #3b82f6);
+  }
+}
+
+.enhance-panel {
+  margin: 0 12px max(12px, env(safe-area-inset-bottom));
+  padding: 14px 10px 6px;
+}
+
+// =====================================================================
+// STEP: PREVIEW
+// =====================================================================
+
+.step-preview {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #05070d;
+  padding-top: 70px;
+}
+
+.preview-grid {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 16px;
+  overflow-y: auto;
+  align-content: flex-start;
+}
+
+.preview-thumb {
+  position: relative;
+  width: 92px;
+  height: 122px;
+  border-radius: var(--radius-sm, 12px);
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.preview-index {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0,0,0,0.55);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+.preview-panel {
+  margin: 0 12px max(14px, env(safe-area-inset-bottom));
+  padding: 16px;
+}
+
+.preview-heading {
+  margin: 0 0 10px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.format-segment {
+  --background: rgba(255,255,255,0.06);
+  border-radius: var(--radius-md, 18px);
+}
+
+.preview-caption {
+  margin: 10px 2px 4px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+}
+
+.preview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+// =====================================================================
+// BUSY OVERLAY
+// =====================================================================
+
+.busy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(5,7,13,0.82);
+  backdrop-filter: blur(6px);
+  color: #fff;
+
+  ion-spinner {
+    width: 40px;
+    height: 40px;
+    color: var(--accent, #3b82f6);
+  }
+
+  p {
+    font-size: 13.5px;
+    color: rgba(255,255,255,0.75);
+  }
+}

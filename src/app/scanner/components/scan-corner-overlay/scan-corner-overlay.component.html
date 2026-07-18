@@ -1,0 +1,27 @@
+<div
+  #stage
+  class="overlay-stage"
+  (pointermove)="onStagePointerMove($event)"
+  (pointerup)="onStagePointerUp()"
+  (pointercancel)="onStagePointerUp()">
+
+  <img [src]="imageUrl" class="overlay-image" alt="Captured document" draggable="false" />
+
+  <svg class="overlay-svg" [attr.width]="'100%'" [attr.height]="'100%'">
+    <polygon class="doc-outline" [attr.points]="outlinePoints"></polygon>
+  </svg>
+
+  <div
+    *ngFor="let key of handleKeys"
+    class="corner-handle"
+    [class.corner-handle--tl]="key === 'topLeft'"
+    [class.corner-handle--tr]="key === 'topRight'"
+    [class.corner-handle--bl]="key === 'bottomLeft'"
+    [class.corner-handle--br]="key === 'bottomRight'"
+    [style.left.px]="displayPoint(key).x"
+    [style.top.px]="displayPoint(key).y"
+    (pointerdown)="onHandlePointerDown(key, $event)">
+    <div class="corner-handle-dot"></div>
+  </div>
+
+</div>

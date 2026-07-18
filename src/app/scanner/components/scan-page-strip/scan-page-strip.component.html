@@ -1,0 +1,30 @@
+<div class="page-strip">
+
+  <div
+    *ngFor="let page of pages; let i = index"
+    class="page-thumb"
+    [class.page-thumb--active]="page.id === activePageId"
+    (click)="select.emit(page.id)">
+
+    <img [src]="thumb(page)" alt="Page {{ i + 1 }}" />
+    <span class="page-number">{{ i + 1 }}</span>
+
+    <div class="page-thumb-actions">
+      <ion-button fill="clear" size="small" (click)="moveUp.emit(page.id); $event.stopPropagation()" [disabled]="i === 0">
+        <ion-icon name="chevron-back-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+      <ion-button fill="clear" size="small" color="danger" (click)="deletePage.emit(page.id); $event.stopPropagation()">
+        <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+      <ion-button fill="clear" size="small" (click)="moveDown.emit(page.id); $event.stopPropagation()" [disabled]="i === pages.length - 1">
+        <ion-icon name="chevron-forward-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </div>
+  </div>
+
+  <div class="page-thumb page-thumb--add" (click)="addPage.emit()">
+    <ion-icon name="add-outline"></ion-icon>
+    <span>Add Page</span>
+  </div>
+
+</div>

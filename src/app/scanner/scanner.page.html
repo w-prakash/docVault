@@ -1,0 +1,193 @@
+<ion-content class="scanner-content" [class.scanner-content--dark]="true" [fullscreen]="true">
+
+  <!-- TOP TOOLBAR -->
+  <div class="scanner-topbar">
+    <ion-button fill="clear" class="topbar-btn" (click)="confirmExit()">
+      <ion-icon name="close" slot="icon-only"></ion-icon>
+    </ion-button>
+
+    <span class="scanner-title">
+      {{ step === 'capture' ? 'Scan Document'
+        : step === 'crop' ? 'Adjust Corners'
+        : step === 'enhance' ? 'Enhance'
+        : 'Review & Save' }}
+    </span>
+
+    <ion-button
+      *ngIf="step === 'enhance' && pages.length"
+      fill="clear" class="topbar-btn topbar-btn--accent"
+      (click)="goToPreview()">
+      Done
+    </ion-button>
+    <div *ngIf="!(step === 'enhance' && pages.length)" class="topbar-spacer"></div>
+  </div>
+
+  <!-- ================= STEP: CAPTURE ================= -->
+  <div class="step-capture" *ngIf="step === 'capture'">
+
+    <div class="capture-frame">
+      <div class="capture-border"></div>
+      <ion-icon name="scan-outline" class="capture-icon"></ion-icon>
+      <p class="capture-hint">Position the document within the frame</p>
+    </div>
+
+    <div class="capture-actions">
+      <button class="capture-secondary" (click)="pickFromGallery()">
+        <ion-icon name="images-outline"></ion-icon>
+        <span>Gallery</span>
+      </button>
+
+      <button class="capture-shutter" (click)="captureDocument()">
+        <span class="shutter-ring"></span>
+      </button>
+
+      <button class="capture-secondary" (click)="pickFromGallery()" [style.visibility]="'hidden'">
+        <ion-icon name="flash-outline"></ion-icon>
+        <span>Flash</span>
+      </button>
+    </div>
+
+    <div class="capture-existing" *ngIf="pages.length">
+      <app-scan-page-strip
+        [pages]="pages"
+        [activePageId]="activePageId"
+        (select)="selectPage($event)"
+        (deletePage)="deletePage($event)"
+        (moveUp)="moveUp($event)"
+        (moveDown)="moveDown($event)">
+      </app-scan-page-strip>
+
+      <ion-button expand="block" class="glass-btn" (click)="goToPreview()">
+        Continue with {{ pages.length }} page{{ pages.length > 1 ? 's' : '' }}
+      </ion-button>
+    </div>
+
+  </div>
+
+  <!-- ================= STEP: CROP / CORNERS ================= -->
+  <div class="step-crop" *ngIf="step === 'crop' && activePage as page">
+
+    <div class="crop-stage">
+      <app-scan-corner-overlay
+        [imageUrl]="page.rawDataUrl"
+        [naturalWidth]="page.rawWidth"
+        [naturalHeight]="page.rawHeight"
+        [corners]="page.corners"
+        (cornersChange)="onCornersChange($event)">
+      </app-scan-corner-overlay>
+    </div>
+
+    <div class="crop-footer">
+      <ion-button fill="clear" class="footer-btn" (click)="retakeCurrentPage()">
+        <ion-icon name="camera-reverse-outline" slot="start"></ion-icon>
+        Retake
+      </ion-button>
+
+      <ion-button class="glass-btn glass-btn--primary" (click)="confirmCrop()">
+        <ion-icon name="checkmark-outline" slot="start"></ion-icon>
+        Flatten Document
+      </ion-button>
+    </div>
+
+  </div>
+
+  <!-- ================= STEP: ENHANCE ================= -->
+  <div class="step-enhance" *ngIf="step === 'enhance' && activePage as page">
+
+    <div class="enhance-stage">
+      <img [src]="pageThumb(page)" class="enhance-image" alt="Scanned page preview" />
+
+      <div class="enhance-quick-actions">
+        <button class="quick-action" (click)="rotateActivePage()">
+          <ion-icon name="reload-outline"></ion-icon>
+        </button>
+        <button class="quick-action" (click)="recropActivePage()">
+          <ion-icon name="crop-outline"></ion-icon>
+        </button>
+        <button class="quick-action" [class.quick-action--active]="showAdjustSliders" (click)="toggleAdjustSliders()">
+          <ion-icon name="options-outline"></ion-icon>
+        </button>
+      </div>
+    </div>
+
+    <div class="enhance-panel glass-card">
+
+      <app-scan-adjust-sliders
+        *ngIf="showAdjustSliders"
+        [adjustments]="page.adjustments"
+        (adjustmentsCommitted)="onAdjustmentsCommitted($event)">
+      </app-scan-adjust-sliders>
+
+      <app-scan-filter-strip
+        [selected]="page.filter"
+        [thumbnailUrl]="page.correctedDataUrl"
+        (selectedChange)="onFilterChange($event)">
+      </app-scan-filter-strip>
+
+      <app-scan-page-strip
+        [pages]="pages"
+        [activePageId]="activePageId"
+        (select)="selectPage($event)"
+        (addPage)="addAnotherPage()"
+        (deletePage)="deletePage($event)"
+        (moveUp)="moveUp($event)"
+        (moveDown)="moveDown($event)">
+      </app-scan-page-strip>
+
+    </div>
+
+  </div>
+
+  <!-- ================= STEP: PREVIEW / SAVE ================= -->
+  <div class="step-preview" *ngIf="step === 'preview'">
+
+    <div class="preview-grid">
+      <div class="preview-thumb" *ngFor="let page of pages; let i = index">
+        <img [src]="pageThumb(page)" alt="Page {{ i + 1 }}" />
+        <span class="preview-index">{{ i + 1 }}</span>
+      </div>
+    </div>
+
+    <div class="preview-panel glass-card">
+
+      <h4 class="preview-heading">Save As</h4>
+
+      <ion-segment [(ngModel)]="saveFormat" mode="ios" class="format-segment">
+        <ion-segment-button value="pdf">
+          <ion-icon name="document-text-outline"></ion-icon>
+          <ion-label>PDF</ion-label>
+        </ion-segment-button>
+        <ion-segment-button value="jpg">
+          <ion-icon name="image-outline"></ion-icon>
+          <ion-label>JPG</ion-label>
+        </ion-segment-button>
+        <ion-segment-button value="png">
+          <ion-icon name="image-outline"></ion-icon>
+          <ion-label>PNG</ion-label>
+        </ion-segment-button>
+      </ion-segment>
+
+      <p class="preview-caption">
+        {{ pages.length }} page{{ pages.length > 1 ? 's' : '' }}
+        {{ saveFormat === 'pdf' ? 'will be combined into one PDF' : 'will be saved as separate images' }}
+      </p>
+
+      <div class="preview-actions">
+        <ion-button fill="clear" class="footer-btn" (click)="backToEnhance()">Back</ion-button>
+        <ion-button class="glass-btn glass-btn--primary" [disabled]="isSaving" (click)="saveAndUpload()">
+          <ion-spinner *ngIf="isSaving" name="crescent"></ion-spinner>
+          <span *ngIf="!isSaving">Save & Continue</span>
+        </ion-button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ================= BUSY OVERLAY ================= -->
+  <div class="busy-overlay" *ngIf="busy">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>{{ busyMessage }}</p>
+  </div>
+
+</ion-content>

@@ -153,6 +153,10 @@ export class DashboardPage implements OnInit, OnDestroy {
     this.router.navigateByUrl('/upload');
   }
 
+  goToScanner() {
+    this.router.navigateByUrl('/scanner');
+  }
+
   goToDocuments() {
     this.router.navigateByUrl('/documents');
   }

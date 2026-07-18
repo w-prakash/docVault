@@ -1,0 +1,39 @@
+<div class="adjust-sliders">
+
+  <div class="adjust-row">
+    <div class="adjust-label">
+      <ion-icon name="sunny-outline"></ion-icon>
+      <span>Brightness</span>
+    </div>
+    <ion-range
+      min="-100" max="100" [(ngModel)]="adjustments.brightness"
+      (ionInput)="onInput()" (ionChange)="onCommit()"
+      color="primary">
+    </ion-range>
+  </div>
+
+  <div class="adjust-row">
+    <div class="adjust-label">
+      <ion-icon name="contrast-outline"></ion-icon>
+      <span>Contrast</span>
+    </div>
+    <ion-range
+      min="-100" max="100" [(ngModel)]="adjustments.contrast"
+      (ionInput)="onInput()" (ionChange)="onCommit()"
+      color="primary">
+    </ion-range>
+  </div>
+
+  <div class="adjust-row">
+    <div class="adjust-label">
+      <ion-icon name="triangle-outline"></ion-icon>
+      <span>Sharpness</span>
+    </div>
+    <ion-range
+      min="0" max="100" [(ngModel)]="adjustments.sharpness"
+      (ionInput)="onInput()" (ionChange)="onCommit()"
+      color="primary">
+    </ion-range>
+  </div>
+
+</div>
