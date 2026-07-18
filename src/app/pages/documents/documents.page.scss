@@ -425,25 +425,8 @@ ion-searchbar {
 
   z-index: 20;
 
-  // Always visible by default — this is the correct behavior for
-  // touch devices, which have no real ":hover" state. The rule below
-  // opts INTO hide-until-hover only on devices that actually support
-  // hovering (i.e. desktop with a mouse), where it reads as a nice
-  // reveal-on-hover instead of buttons that are invisible and
-  // effectively untappable on a phone.
+  // Always visible — no hover/click gating on any device.
   opacity: 1;
-
-  transition: 0.2s ease;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .overlay-actions {
-    opacity: 0;
-  }
-
-  .file-card:hover .overlay-actions {
-    opacity: 1;
-  }
 }
 
 .overlay-actions ion-button {
@@ -944,4 +927,103 @@ ion-refresher-content {
   --pulling-icon-color: #7c4dff;
 
   background: transparent;
+}
+/* ======================================================
+   BULK DELETE OVERLAY (mirrors the upload page's
+   "Securing Files" progress modal)
+====================================================== */
+
+.bulk-delete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(12px);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.bulk-delete-box {
+  width: 100%;
+  max-width: 340px;
+
+  padding: 28px 24px;
+
+  border-radius: 28px;
+
+  background: rgba(15,23,42,0.96);
+  border: 1px solid rgba(255,255,255,0.06);
+
+  text-align: center;
+}
+
+.bulk-delete-icon {
+  width: 82px;
+  height: 82px;
+
+  margin: 0 auto 18px;
+
+  border-radius: 50%;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  font-size: 38px;
+
+  background: linear-gradient(135deg, rgba(239,68,68,0.25), rgba(220,38,38,0.12));
+
+  animation: bulkDeletePulse 1.6s infinite;
+}
+
+@keyframes bulkDeletePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.35); }
+  50%      { box-shadow: 0 0 0 14px rgba(239,68,68,0); }
+}
+
+.bulk-delete-box h3 {
+  color: white;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.bulk-delete-box p {
+  margin-top: 10px;
+  color: rgba(255,255,255,0.7);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bulk-progress-bar {
+  width: 100%;
+  height: 12px;
+
+  margin-top: 24px;
+
+  border-radius: 999px;
+  overflow: hidden;
+
+  background: rgba(255,255,255,0.08);
+}
+
+.bulk-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+
+  transition: width 0.35s ease;
+}
+
+.bulk-progress-text {
+  margin-top: 14px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
 }

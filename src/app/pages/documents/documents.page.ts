@@ -106,6 +106,11 @@ export class DocumentsPage implements OnDestroy {
   selectedIds = new Set<number>();
   private longPressTimer: any = null;
   private longPressTriggered = false;
+
+  // ── Bulk delete progress ───────────────────────────────────────────────────
+  isBulkDeleting = false;
+  bulkDeleteProgress = 0;
+  bulkDeleteMessage = '';
   // ── Private ────────────────────────────────────────────────────────────────
 
   /**
@@ -2272,26 +2277,36 @@ private async blobToBase64String(
       this.selectedIds = new Set(this.documents.map(d => d.id));
     }
   }
+async confirmBulkDelete() {
+  const count = this.selectedIds.size;
 
-  async confirmBulkDelete() {
-
-    const count = this.selectedIds.size;
-
-    if (count === 0) {
-      return;
-    }
-
-    const alert = await this.alertCtrl.create({
-      header: `Delete ${count} document${count === 1 ? '' : 's'}?`,
-      message: `This will permanently delete the selected document${count === 1 ? '' : 's'} from your vault and Google Drive. This can't be undone.`,
-      buttons: [
-        { text: 'Cancel', role: 'cancel' },
-        { text: 'Delete', role: 'destructive', handler: () => this.bulkDelete() },
-      ],
-    });
-
-    await alert.present();
+  if (count === 0) {
+    return;
   }
+
+  const alert = await this.alertCtrl.create({
+    header: `Delete ${count} document${count === 1 ? '' : 's'}?`,
+    message: `This will permanently delete the selected document${count === 1 ? '' : 's'} from your vault and Google Drive. This can't be undone.`,
+    buttons: [
+      {
+        text: 'Cancel',
+        role: 'cancel'
+      },
+      {
+        text: 'Delete',
+        role: 'destructive'
+      }
+    ]
+  });
+
+  await alert.present();
+
+  const { role } = await alert.onDidDismiss();
+
+  if (role === 'destructive') {
+    await this.bulkDelete();
+  }
+}
 
   async bulkDelete() {
 
@@ -2309,16 +2324,30 @@ private async blobToBase64String(
 
     this.exitSelectionMode();
 
+    // 🔄 progress overlay — same pattern as the upload flow
+    this.isBulkDeleting = true;
+    this.bulkDeleteProgress = 0;
+    this.bulkDeleteMessage = `Deleting ${docsToDelete[0].original_name || 'document'}`;
+
     let failCount = 0;
 
-    for (const doc of docsToDelete) {
+    for (let i = 0; i < docsToDelete.length; i++) {
+
+      const doc = docsToDelete[i];
+
+      this.bulkDeleteMessage = `Deleting ${doc.original_name || 'document'}`;
+
       try {
         await this.removeDocumentEverywhere(doc);
       } catch (e) {
         console.error('❌ Bulk delete failed for doc', doc.id, e);
         failCount++;
       }
+
+      this.bulkDeleteProgress = Math.round(((i + 1) / count) * 100);
     }
+
+    this.isBulkDeleting = false;
 
     if (failCount === 0) {
       await this.showToast(`${count} document${count === 1 ? '' : 's'} deleted`);

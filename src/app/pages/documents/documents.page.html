@@ -361,4 +361,30 @@
     </ng-template>
   </ion-modal>
 
+  <!-- BULK DELETE OVERLAY -->
+
+  <div class="bulk-delete-overlay" *ngIf="isBulkDeleting">
+
+    <div class="bulk-delete-box">
+
+      <div class="bulk-delete-icon">
+        🗑️
+      </div>
+
+      <h3>Deleting Files</h3>
+
+      <p>{{ bulkDeleteMessage }}</p>
+
+      <div class="bulk-progress-bar">
+        <div class="bulk-progress-fill" [style.width.%]="bulkDeleteProgress"></div>
+      </div>
+
+      <div class="bulk-progress-text">
+        {{ bulkDeleteProgress }}%
+      </div>
+
+    </div>
+
+  </div>
+
 </ion-content>
