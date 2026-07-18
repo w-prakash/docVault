@@ -399,9 +399,13 @@ async changeVaultPassword(
   }
 
   // ---- collect every locally cached ciphertext file ----
-  const targets: { dir: 'vault' | 'thumbnails'; name: string }[] = [];
+  // Only 'vault' holds real AES ciphertext (the encrypted documents).
+  // 'thumbnails' is plain, unencrypted base64 image data — it's never
+  // passed through encryptData/decryptData anywhere in the app, so running
+  // it through AES-decrypt here would just corrupt it, not "re-encrypt" it.
+  const targets: { dir: 'vault'; name: string }[] = [];
 
-  for (const dir of ['vault', 'thumbnails'] as const) {
+  for (const dir of ['vault'] as const) {
     try {
       const listing = await Filesystem.readdir({ path: dir, directory: Directory.Data });
       for (const file of listing.files) {
