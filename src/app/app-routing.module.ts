@@ -52,6 +52,15 @@ const routes: Routes = [
     import('./pages/documents/documents.page').then((m) => m.DocumentsPage),
   },
   {
+    path: 'pdf-viewer/:id',
+    canActivate: [
+    AuthGuard,
+    VaultGuard
+  ],
+    loadComponent: () =>
+    import('./pages/pdf-viewer/pdf-viewer.page').then((m) => m.PdfViewerPage),
+  },
+  {
     path: 'settings',
     canActivate: [AuthGuard],
     loadComponent: () =>

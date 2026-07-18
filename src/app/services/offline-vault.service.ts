@@ -632,6 +632,151 @@ async clearLocalFileCache(): Promise<void> {
 }
 
 // =====================================
+// SYNC QUEUE COUNTS (Settings → Sync section)
+// Reuses the same syncQueue table that addToSyncQueue/markSyncJobDone/
+// markSyncJobFailed already manage — no new state, just read-side counts.
+// =====================================
+
+async getSyncQueueCounts(): Promise<{ pending: number; failed: number }> {
+
+  const [pending, failed] = await Promise.all([
+    this.syncQueue.where('status').equals('pending').count(),
+    this.syncQueue.where('status').equals('failed').count()
+  ]);
+
+  return { pending, failed };
+}
+
+// =====================================
+// RETRY FAILED SYNC JOBS
+// Flips 'failed' jobs back to 'pending' and resets their retry_count so
+// the existing sync worker (whatever drains 'pending' jobs) picks them
+// back up on its next pass. Does not duplicate the actual upload/download
+// logic - just re-queues.
+// =====================================
+
+async retryFailedSyncJobs(): Promise<number> {
+
+  const failedJobs =
+    await this.syncQueue.where('status').equals('failed').toArray();
+
+  for (const job of failedJobs) {
+    await this.syncQueue.update(job.id, { status: 'pending', retry_count: 0 });
+  }
+
+  return failedJobs.length;
+}
+
+// =====================================
+// DIRECTORY BYTE SIZE (shared helper — used by the detailed storage
+// breakdown below; does not change existing clearLocalFileCache /
+// resetAllLocalData behaviour)
+// =====================================
+
+private async directoryStats(dir: string): Promise<{ count: number; bytes: number; largest: number }> {
+
+  let count = 0;
+  let bytes = 0;
+  let largest = 0;
+
+  try {
+
+    const result = await Filesystem.readdir({ path: dir, directory: Directory.Data });
+
+    for (const file of result.files) {
+
+      if (file.type === 'file') {
+        count++;
+        bytes += file.size ?? 0;
+        largest = Math.max(largest, file.size ?? 0);
+      }
+    }
+
+  } catch {
+    // directory doesn't exist yet - nothing there
+  }
+
+  return { count, bytes, largest };
+}
+
+// =====================================
+// DETAILED STORAGE BREAKDOWN (Settings → Storage section)
+// =====================================
+
+async getDetailedStorageBreakdown(): Promise<{
+  vaultBytes: number;
+  thumbnailBytes: number;
+  fileCount: number;
+  largestFileBytes: number;
+  averageFileBytes: number;
+  databaseSizeEstimateBytes: number;
+}> {
+
+  const [vaultStats, thumbStats] = await Promise.all([
+    this.directoryStats('vault'),
+    this.directoryStats('thumbnails')
+  ]);
+
+  const fileCount = vaultStats.count + thumbStats.count;
+  const totalBytes = vaultStats.bytes + thumbStats.bytes;
+  const largestFileBytes = Math.max(vaultStats.largest, thumbStats.largest);
+
+  // Dexie/IndexedDB doesn't expose a direct byte size API, so metadata
+  // storage is estimated from row counts - a reasonable proxy, clearly
+  // labeled as an estimate rather than presented as an exact figure.
+  const [memberCount, categoryCount, typeCount, documentCount, syncCount, notifCount] = await Promise.all([
+    this.members.count(),
+    this.categories.count(),
+    this.types.count(),
+    this.documents.count(),
+    this.syncQueue.count(),
+    this.notifications.count()
+  ]);
+
+  const estimatedRowBytes = 512; // rough average metadata row size
+  const databaseSizeEstimateBytes =
+    (memberCount + categoryCount + typeCount + documentCount + syncCount + notifCount) * estimatedRowBytes;
+
+  return {
+    vaultBytes: vaultStats.bytes,
+    thumbnailBytes: thumbStats.bytes,
+    fileCount,
+    largestFileBytes,
+    averageFileBytes: fileCount > 0 ? Math.round(totalBytes / fileCount) : 0,
+    databaseSizeEstimateBytes
+  };
+}
+
+// =====================================
+// CLEAR THUMBNAIL CACHE ONLY (Settings → Maintenance)
+// =====================================
+
+async clearThumbnailCacheOnly(): Promise<void> {
+
+  try {
+
+    const result = await Filesystem.readdir({ path: 'thumbnails', directory: Directory.Data });
+
+    for (const file of result.files) {
+      if (file.type === 'file') {
+        await Filesystem.deleteFile({ path: `thumbnails/${file.name}`, directory: Directory.Data });
+      }
+    }
+
+  } catch {
+    // nothing cached - fine
+  }
+
+  const allDocs = await this.documents.toArray();
+
+  for (const doc of allDocs) {
+    if (doc.thumbnail_path) {
+      await this.documents.update(doc.id, { thumbnail_path: null });
+    }
+  }
+}
+
+// =====================================
 // RESET ALL LOCAL DATA (Phase 10 - Reset Vault)
 // Wipes every local table. Does NOT touch Google Drive - files already
 // uploaded remain there. This is the local-device side of a vault reset;

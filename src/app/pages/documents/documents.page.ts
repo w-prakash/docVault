@@ -14,6 +14,7 @@ import { AlertController } from '@ionic/angular';
 import { ToastController } from '@ionic/angular';
 import { decryptData } from 'src/app/utils/encryption.util';
 import { NotificationService } from 'src/app/services/notification.service';
+import { isPdfDocument } from 'src/app/utils/file-type.util';
 (pdfjsLib as any).GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.js';
 import { VaultService } from '../../services/vault.service';
 import { OfflineVaultService } from 'src/app/services/offline-vault.service';
@@ -1471,6 +1472,14 @@ async viewDoc(
   doc: DocumentItem
 ) {
 
+  if (isPdfDocument(doc)) {
+    // The PDF viewer page re-runs its own cache/decrypt pipeline via
+    // DocumentContentService, so hand off immediately rather than
+    // downloading and decrypting here too.
+    await this.router.navigate(['/pdf-viewer', doc.id]);
+    return;
+  }
+
   try {
 
     // ───────────────────────────────
@@ -1591,53 +1600,9 @@ console.log(
     this.isPdf =
       isPdf;
 
-if (isPdf) {
-
-  console.log(
-    '📄 OPENING PDF NATIVELY'
-  );
-
-  const base64 =
-    this.arrayBufferToBase64(
-      safeBuffer
-    );
-
-  const tempFile =
-    `preview_${Date.now()}.pdf`;
-
-  await Filesystem.writeFile({
-
-    path: tempFile,
-
-    data: base64,
-
-    directory:
-      Directory.Cache
-  });
-
-  const uri =
-    await Filesystem.getUri({
-
-      path: tempFile,
-
-      directory:
-        Directory.Cache
-    });
-
-  console.log(
-    '📄 PDF URI:',
-    uri.uri
-  );
-
-  await Share.share({
-
-    title: 'Open PDF',
-
-    url: uri.uri
-  });
-
-  return;
-}
+// PDFs are handed off to the in-app viewer before this point (see the
+// early return at the top of viewDoc), so isPdf here is always false —
+// this path is the non-PDF preview (images, etc.) only.
 
     this.isPreviewOpen =
       true;

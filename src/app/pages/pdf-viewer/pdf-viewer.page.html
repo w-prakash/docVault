@@ -1,0 +1,113 @@
+<ion-header class="pdf-header">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="goBack()">
+        <ion-icon slot="icon-only" name="chevron-back-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+
+    <ion-title class="pdf-title">{{ docName }}</ion-title>
+
+    <ion-buttons slot="end">
+      <ion-button (click)="toggleSearch()">
+        <ion-icon slot="icon-only" name="search-outline"></ion-icon>
+      </ion-button>
+      <ion-button (click)="shareDocument()" [disabled]="loading || !!error">
+        <ion-icon slot="icon-only" name="share-social-outline"></ion-icon>
+      </ion-button>
+      <ion-button (click)="downloadDocument()" [disabled]="loading || !!error">
+        <ion-icon slot="icon-only" name="download-outline"></ion-icon>
+      </ion-button>
+      <ion-button (click)="openMoreOptions()" [disabled]="loading || !!error">
+        <ion-icon slot="icon-only" name="ellipsis-vertical"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <ion-toolbar *ngIf="showSearch" class="search-toolbar">
+    <ion-searchbar
+      [(ngModel)]="searchQuery"
+      (ionInput)="runSearch()"
+      placeholder="Search in document"
+      debounce="400"
+    ></ion-searchbar>
+    <ion-buttons slot="end" *ngIf="searchMatches.length > 0">
+      <span class="match-count">{{ searchMatchIndex + 1 }} / {{ searchMatches.length }}</span>
+      <ion-button (click)="previousMatch()">
+        <ion-icon slot="icon-only" name="chevron-up-outline"></ion-icon>
+      </ion-button>
+      <ion-button (click)="nextMatch()">
+        <ion-icon slot="icon-only" name="chevron-down-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="pdf-content" [scrollY]="false">
+
+  <!-- LOADING STATE -->
+  <div class="state-panel" *ngIf="loading">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p class="state-message">{{ statusMessage }}</p>
+    <div class="progress-track" *ngIf="downloadProgress > 0 && downloadProgress < 100">
+      <div class="progress-fill" [style.width.%]="downloadProgress"></div>
+    </div>
+    <p class="progress-percent" *ngIf="downloadProgress > 0 && downloadProgress < 100">{{ downloadProgress }}%</p>
+  </div>
+
+  <!-- ERROR STATE -->
+  <div class="state-panel" *ngIf="!loading && error">
+    <ion-icon
+      [name]="offlineNotCached ? 'cloud-offline-outline' : 'alert-circle-outline'"
+      class="state-icon"
+    ></ion-icon>
+    <p class="state-message">{{ error }}</p>
+    <ion-button fill="outline" (click)="retry()">
+      <ion-icon slot="start" name="refresh-outline"></ion-icon>
+      Retry
+    </ion-button>
+  </div>
+
+  <!-- PDF PAGES -->
+  <div
+    #scrollContainer
+    class="pdf-scroll-container"
+    [class.dark-reading]="darkReadingMode"
+    *ngIf="!loading && !error"
+    (touchstart)="onTouchStart($event)"
+    (touchmove)="onTouchMove($event)"
+    (touchend)="onTouchEnd()"
+    (click)="onDoubleTap()"
+  >
+    <div
+      class="pdf-page"
+      *ngFor="let page of pages"
+      [attr.data-page]="page.pageNumber"
+      [style.width.px]="page.width"
+      [style.height.px]="page.height"
+      [style.transform]="'scale(' + liveTransform + ')'"
+    >
+      <div class="page-skeleton" *ngIf="!page.rendered"></div>
+      <canvas [id]="'pdf-canvas-' + page.pageNumber"></canvas>
+    </div>
+  </div>
+
+  <!-- PAGE INDICATOR -->
+  <div class="page-indicator" *ngIf="!loading && !error && numPages > 0">
+    Page {{ currentPage }} of {{ numPages }}
+  </div>
+
+  <!-- ZOOM CONTROLS -->
+  <div class="zoom-controls" *ngIf="!loading && !error">
+    <ion-button size="small" fill="clear" (click)="zoomOut()">
+      <ion-icon slot="icon-only" name="remove-outline"></ion-icon>
+    </ion-button>
+    <ion-button size="small" fill="clear" (click)="setFitWidth()">
+      <ion-icon slot="icon-only" name="scan-outline"></ion-icon>
+    </ion-button>
+    <ion-button size="small" fill="clear" (click)="zoomIn()">
+      <ion-icon slot="icon-only" name="add-outline"></ion-icon>
+    </ion-button>
+  </div>
+
+</ion-content>

@@ -21,3 +21,14 @@ export function isSupportedDocumentType(file: File): boolean {
 export function unsupportedFileTypeMessage(file: File): string {
   return `"${file.name}" isn't a supported file type. DocVault accepts images, PDF, DOCX, XLSX, ZIP, and TXT files.`;
 }
+
+/** Same PDF check used across the documents list, thumbnailing, and the PDF viewer — one definition so they can't drift apart. */
+export function isPdfDocument(doc: { file_type?: string; local_file_name?: string; file_url?: string }): boolean {
+
+  if (doc.file_type === 'application/pdf') {
+    return true;
+  }
+
+  const name = doc.local_file_name || doc.file_url || '';
+  return name.toLowerCase().includes('.pdf');
+}

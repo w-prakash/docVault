@@ -1,0 +1,182 @@
+.pdf-header {
+  ion-toolbar {
+    --background: rgba(15, 23, 42, 0.85);
+    --color: var(--text-primary);
+    backdrop-filter: var(--blur);
+  }
+}
+
+.pdf-title {
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-toolbar {
+  --background: rgba(15, 23, 42, 0.95);
+
+  ion-searchbar {
+    --background: rgba(255, 255, 255, 0.06);
+    --color: var(--text-primary);
+    --placeholder-color: var(--text-secondary);
+  }
+
+  .match-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+    align-self: center;
+    margin-right: 4px;
+  }
+}
+
+.pdf-content {
+  --background: var(--app-bg);
+  position: relative;
+  height: 100%;
+}
+
+.state-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+
+  ion-spinner {
+    width: 40px;
+    height: 40px;
+    color: var(--accent);
+  }
+
+  .state-icon {
+    font-size: 48px;
+    color: var(--danger);
+    opacity: 0.85;
+  }
+
+  .state-message {
+    color: var(--text-secondary);
+    font-size: 14px;
+    max-width: 280px;
+    line-height: 1.5;
+    margin: 0;
+  }
+}
+
+.progress-track {
+  width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.progress-percent {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.pdf-scroll-container {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 96px;
+  -webkit-overflow-scrolling: touch;
+
+  &.dark-reading .pdf-page canvas {
+    filter: invert(1) hue-rotate(180deg);
+  }
+}
+
+.pdf-page {
+  position: relative;
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transform-origin: top center;
+  transition: transform 0.08s ease-out;
+  flex-shrink: 0;
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.page-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(0, 0, 0, 0.04) 30%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.04) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.page-indicator {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: var(--blur);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--card-border);
+  pointer-events: none;
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+
+  ion-button {
+    --color: var(--text-primary);
+    margin: 0;
+  }
+}
+
+// Landscape: give the toolbar less vertical footprint, keep everything else fluid.
+@media (orientation: landscape) {
+  .pdf-scroll-container {
+    padding-bottom: 72px;
+  }
+}
