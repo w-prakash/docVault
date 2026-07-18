@@ -425,13 +425,25 @@ ion-searchbar {
 
   z-index: 20;
 
-  opacity: 0;
+  // Always visible by default — this is the correct behavior for
+  // touch devices, which have no real ":hover" state. The rule below
+  // opts INTO hide-until-hover only on devices that actually support
+  // hovering (i.e. desktop with a mouse), where it reads as a nice
+  // reveal-on-hover instead of buttons that are invisible and
+  // effectively untappable on a phone.
+  opacity: 1;
 
   transition: 0.2s ease;
 }
 
-.file-card:hover .overlay-actions {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .overlay-actions {
+    opacity: 0;
+  }
+
+  .file-card:hover .overlay-actions {
+    opacity: 1;
+  }
 }
 
 .overlay-actions ion-button {

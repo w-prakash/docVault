@@ -1784,25 +1784,60 @@ if (!isMobile) {
 } else {
 
   // 📱 Mobile
+  //
+  // Directory.Documents needs Android storage permissions that live in
+  // the native project (AndroidManifest.xml / capacitor.config), not in
+  // this src/ tree, and silently throws if they're not granted — that
+  // silent failure is exactly what "download doesn't work" looks like.
+  // Try it first, but fall back to Directory.Cache + the OS share sheet
+  // (the same permission-free approach shareDoc() already uses) so the
+  // person can still save the file even if direct write isn't available.
 
   const base64 =
     await this.blobToBase64String(
       blob
     );
 
-  await Filesystem.writeFile({
+  try {
 
-    path: fileName,
+    await Filesystem.writeFile({
 
-    data: base64,
+      path: fileName,
 
-    directory:
-      Directory.Documents
-  });
+      data: base64,
 
-  await this.showToast(
-    'File saved to Documents'
-  );
+      directory:
+        Directory.Documents
+    });
+
+    await this.showToast(
+      'File saved to Documents'
+    );
+
+  } catch (writeErr) {
+
+    console.warn(
+      '⚠️ Direct save to Documents failed, falling back to share sheet',
+      writeErr
+    );
+
+    await Filesystem.writeFile({
+      path: fileName,
+      data: base64,
+      directory: Directory.Cache
+    });
+
+    const uri =
+      await Filesystem.getUri({
+        path: fileName,
+        directory: Directory.Cache
+      });
+
+    await Share.share({
+      title: fileName,
+      url: uri.uri
+    });
+  }
 }
     console.log(
       '✅ DOWNLOAD SUCCESS'

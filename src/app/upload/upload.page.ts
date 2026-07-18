@@ -249,11 +249,26 @@ async openOptions(fileInput: any) {
       source: CameraSource.Camera,
     });
 
-    const file = await this.convertToFile(image.webPath!);
+    if (!image.webPath) {
+      return;
+    }
+
+    const file = await this.convertToFile(image.webPath);
 
     if (file) {
       this.files.push(file);
       this.selectedFileNames.push(file.name);
+
+      // This is what the template actually renders in the preview grid —
+      // captureFromCamera() previously never pushed to it, so a photo taken
+      // with the camera was uploaded but invisible in the picker, and it
+      // also desynced the array indices removeFile() relies on whenever a
+      // camera shot was mixed with a gallery pick.
+      this.selectedFilesPreview.push({
+        name: file.name,
+        type: file.type,
+        url: image.webPath
+      });
     }
   }
 
