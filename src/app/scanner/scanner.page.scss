@@ -80,12 +80,17 @@
   --color: rgba(255,255,255,0.75);
 }
 
+.footer-btn--danger {
+  --color: #ff8a8a;
+}
+
 // =====================================================================
 // STEP: CAPTURE
 // =====================================================================
 
 .step-capture {
-  height: 100%;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -193,15 +198,48 @@
 // =====================================================================
 
 .step-crop {
-  height: 100%;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   background: #05070d;
+  overflow: hidden;
 }
 
 .crop-stage {
   flex: 1;
+  min-height: 0;
   padding-top: 70px;
+}
+
+.detection-hint {
+  position: absolute;
+  top: 76px;
+  left: 12px;
+  right: 12px;
+  z-index: 5;
+  pointer-events: none;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 12px);
+
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  backdrop-filter: blur(8px);
+
+  color: #cfe0ff;
+  font-size: 12.5px;
+  line-height: 1.4;
+
+  ion-icon {
+    flex-shrink: 0;
+    font-size: 18px;
+    color: var(--accent, #3b82f6);
+  }
 }
 
 .crop-footer {
@@ -218,14 +256,17 @@
 // =====================================================================
 
 .step-enhance {
-  height: 100%;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   background: #05070d;
+  overflow: hidden;
 }
 
 .enhance-stage {
   flex: 1;
+  min-height: 0;
   position: relative;
   display: flex;
   align-items: center;
@@ -270,6 +311,14 @@
   &--active {
     background: var(--accent, #3b82f6);
   }
+
+  &--danger {
+    color: #ff8a8a;
+
+    ion-icon {
+      color: #ff8a8a;
+    }
+  }
 }
 
 .enhance-panel {
@@ -282,15 +331,18 @@
 // =====================================================================
 
 .step-preview {
-  height: 100%;
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   background: #05070d;
   padding-top: 70px;
+  overflow: hidden;
 }
 
 .preview-grid {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;

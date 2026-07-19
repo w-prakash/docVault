@@ -100,7 +100,12 @@ export class ScannerPage implements OnInit, OnDestroy {
       const page = await this.scannerService.captureNewPage();
       this.activePageId = page.id;
       this.step = 'crop';
+
+      if (!page.detected) {
+        this.showToast('Unable to detect document automatically. Adjust the corners manually.');
+      }
     } catch (e) {
+      if (this.isUserCancellation(e)) return;
       console.error('❌ Capture failed', e);
       this.showToast('Could not open the camera. Please check permissions.');
     }
@@ -111,9 +116,25 @@ export class ScannerPage implements OnInit, OnDestroy {
       const page = await this.scannerService.addPageFromGallery();
       this.activePageId = page.id;
       this.step = 'crop';
+
+      if (!page.detected) {
+        this.showToast('Unable to detect document automatically. Adjust the corners manually.');
+      }
     } catch (e) {
+      if (this.isUserCancellation(e)) return;
+      // Previously this only logged to the console, so a real failure
+      // (permission denied, picker couldn't open, image failed to load)
+      // looked exactly like "nothing happens" from the user's side.
       console.error('❌ Gallery pick failed', e);
+      this.showToast('Could not open the gallery. Please check photo permissions.');
     }
+  }
+
+  /** Capacitor Camera rejects with a "cancelled" message when the user backs
+   * out of the camera/photo picker — that's not an error worth surfacing. */
+  private isUserCancellation(e: unknown): boolean {
+    const message = (e as any)?.message?.toString().toLowerCase() ?? '';
+    return message.includes('cancel');
   }
 
   async retakeCurrentPage() {
@@ -181,6 +202,33 @@ export class ScannerPage implements OnInit, OnDestroy {
   }
 
   async deletePage(pageId: string) {
+    const alert = await this.alertCtrl.create({
+      header: 'Delete this image?',
+      cssClass: 'vault-action-sheet',
+      buttons: [
+        { text: 'Cancel', role: 'cancel' },
+        {
+          text: 'Delete',
+          role: 'destructive',
+          handler: () => {
+            this.performDeletePage(pageId);
+          },
+        },
+      ],
+    });
+
+    await alert.present();
+  }
+
+  /** Delete button on the crop step — lets the person clear the page they just
+   * captured/picked and go back to capture/gallery without immediately
+   * reopening the camera the way Retake does. */
+  async deleteActivePage() {
+    if (!this.activePageId) return;
+    await this.deletePage(this.activePageId);
+  }
+
+  private performDeletePage(pageId: string) {
     this.scannerService.deletePage(pageId);
 
     if (this.pages.length === 0) {

@@ -50,7 +50,7 @@ export class ScannerService {
 
     const photo = await Camera.getPhoto({
       quality: 92,
-      resultType: CameraResultType.DataUrl,
+      resultType: CameraResultType.Uri,
       source: CameraSource.Camera,
       direction: 'rear' as any,
       allowEditing: false,
@@ -58,27 +58,59 @@ export class ScannerService {
       saveToGallery: false,
     });
 
-    if (!photo.dataUrl) {
+    console.log('🟢 [scan] Camera response:', { webPath: photo.webPath, format: photo.format });
+
+    if (!photo.webPath) {
       throw new Error('Camera capture returned no image data');
     }
 
-    return this.createPageFromDataUrl(photo.dataUrl);
+    const dataUrl = await this.uriToDataUrl(photo.webPath);
+    return this.createPageFromDataUrl(dataUrl);
   }
 
   /** Adds a page from an existing gallery image, same pipeline as a camera capture. */
   async addPageFromGallery(): Promise<ScanPage> {
     const photo = await Camera.getPhoto({
       quality: 92,
-      resultType: CameraResultType.DataUrl,
+      resultType: CameraResultType.Uri,
       source: CameraSource.Photos,
       correctOrientation: true,
     });
 
-    if (!photo.dataUrl) {
+    console.log('🟢 [scan] Gallery response:', { webPath: photo.webPath, format: photo.format });
+
+    if (!photo.webPath) {
       throw new Error('Gallery pick returned no image data');
     }
 
-    return this.createPageFromDataUrl(photo.dataUrl);
+    const dataUrl = await this.uriToDataUrl(photo.webPath);
+    return this.createPageFromDataUrl(dataUrl);
+  }
+
+  /**
+   * Converts a Capacitor Camera `webPath` (a blob: URL the WebView can fetch
+   * directly, no native-bridge marshaling involved) into a data: URL.
+   *
+   * WHY: requesting `CameraResultType.DataUrl` directly makes Capacitor
+   * base64-encode the image natively and pass the whole string across the
+   * JS bridge in one message. That's fine for small camera-compressed
+   * photos, but full-resolution gallery originals can be tens of MB —
+   * on Android WebView that bridge transfer is a well-known source of
+   * hangs/OOM crashes (doesn't show up in the browser build, which has no
+   * native bridge). Fetching the blob: URL directly and reading it with
+   * FileReader in JS sidesteps the bridge entirely. Same pattern already
+   * used for camera capture in upload.page.ts.
+   */
+  private uriToDataUrl(webPath: string): Promise<string> {
+    console.log('🟢 [scan] Image URI:', webPath);
+    return fetch(webPath)
+      .then(res => res.blob())
+      .then(blob => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }));
   }
 
   private async createPageFromDataUrl(dataUrl: string): Promise<ScanPage> {
@@ -86,13 +118,18 @@ export class ScannerService {
     this.setBusy(true, 'Detecting document edges...');
 
     try {
+      await this.nextFrame();
       const img = await this.loadImage(dataUrl);
 
       let corners: ScanCorners;
+      let detected = true;
       try {
-        corners = await this.detectionService.detect(img);
+        const result = await this.detectionService.detect(img);
+        corners = result.corners;
+        detected = result.detected;
       } catch {
         corners = createEmptyCorners(img.naturalWidth, img.naturalHeight);
+        detected = false;
       }
 
       const page: ScanPage = {
@@ -101,6 +138,7 @@ export class ScannerService {
         rawWidth: img.naturalWidth,
         rawHeight: img.naturalHeight,
         corners,
+        detected,
         correctedDataUrl: null,
         rotation: 0,
         filter: 'enhanced',
@@ -132,6 +170,7 @@ export class ScannerService {
     this.setBusy(true, 'Flattening document...');
 
     try {
+      await this.nextFrame(); // let the busy overlay actually paint before the heavy work below
       const img = await this.loadImage(page.rawDataUrl);
       const correctedDataUrl = await this.processingService.perspectiveCorrect(img, page.corners);
 
@@ -173,6 +212,7 @@ export class ScannerService {
     this.setBusy(true, 'Applying enhancements...');
 
     try {
+      await this.nextFrame();
       const rotated = await this.processingService.rotate(base, page.rotation);
       const finalDataUrl = await this.processingService.applyFilterAndAdjustments(
         rotated,
@@ -247,6 +287,15 @@ export class ScannerService {
       img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = src;
+    });
+  }
+
+  /** Resolves after the browser has had a chance to paint at least one frame — used to
+   * guarantee a busy/loading state is actually visible before a long synchronous task
+   * (e.g. an OpenCV warp) blocks the main thread. */
+  private nextFrame(): Promise<void> {
+    return new Promise(resolve => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
   }
 }

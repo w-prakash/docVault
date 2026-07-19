@@ -80,6 +80,10 @@ export interface ScanPage {
   /** Detected (or manually adjusted) document corners, in raw-image pixel space. */
   corners: ScanCorners;
 
+  /** False when auto-detection couldn't find the document and `corners` is
+   * the inset default — used to prompt the user to adjust manually. */
+  detected: boolean;
+
   /** Result of perspective correction (flattened, rectangular) — data URL. */
   correctedDataUrl: string | null;
 

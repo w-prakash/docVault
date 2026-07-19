@@ -27,8 +27,15 @@ export class ImageProcessingService {
     const heightLeft = this.distance(topLeft, bottomLeft);
     const heightRight = this.distance(topRight, bottomRight);
 
-    const outputWidth = Math.max(1, Math.round(Math.max(widthTop, widthBottom)));
-    const outputHeight = Math.max(1, Math.round(Math.max(heightLeft, heightRight)));
+    const rawWidth = Math.max(1, Math.round(Math.max(widthTop, widthBottom)));
+    const rawHeight = Math.max(1, Math.round(Math.max(heightLeft, heightRight)));
+
+    const MAX_OUTPUT_DIMENSION = 2200;
+    const longEdge = Math.max(rawWidth, rawHeight);
+    const downscale = longEdge > MAX_OUTPUT_DIMENSION ? MAX_OUTPUT_DIMENSION / longEdge : 1;
+
+    const outputWidth = Math.max(1, Math.round(rawWidth * downscale));
+    const outputHeight = Math.max(1, Math.round(rawHeight * downscale));
 
     let cv: any;
     try {

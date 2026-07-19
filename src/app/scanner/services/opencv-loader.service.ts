@@ -43,45 +43,86 @@ export class OpenCvLoaderService {
 
     this.loadingPromise = new Promise((resolve, reject) => {
 
-      const existing = document.querySelector(`script[src="${this.scriptUrl}"]`);
+      // Defense in depth: no matter what happens above, this promise is
+      // guaranteed to settle exactly once within the timeout window, so a
+      // scan can never hang the UI forever even if some other edge case
+      // slips through the onReady() logic.
+      let settled = false;
+
+      const settleResolve = (cv: any) => {
+        if (settled) return;
+        settled = true;
+        resolve(cv);
+      };
+
+      const settleReject = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        this.loadingPromise = null;
+        reject(err);
+      };
+
+      const existing = document.querySelector(`script[src="${this.scriptUrl}"]`) as HTMLScriptElement | null;
 
       const onReady = () => {
-        if (window.cv?.onRuntimeInitialized !== undefined) {
-          // cv.js exposes readiness via this callback in the WASM build.
-          window.cv['onRuntimeInitialized'] = () => resolve(window.cv);
-        } else if (window.cv) {
-          resolve(window.cv);
+        // If OpenCV has ALREADY finished initializing by the time the
+        // script finishes loading/executing, resolve immediately instead
+        // of registering a callback — Emscripten's WASM runtime init can
+        // complete synchronously during script execution (fast devices,
+        // a cached script, small builds), and onRuntimeInitialized only
+        // ever fires once. Registering our handler *after* it already
+        // fired meant this promise would never resolve, and the 12s
+        // safety timeout below wouldn't catch it either — it only
+        // rejects when cv.Mat is still missing, which by then it isn't.
+        // This was the permanent-hang bug: capture would succeed and the
+        // app would just sit there forever with the editor never opening.
+        if (window.cv && window.cv.Mat) {
+          settleResolve(window.cv);
+          return;
+        }
+
+        if (window.cv) {
+          window.cv['onRuntimeInitialized'] = () => settleResolve(window.cv);
         } else {
-          reject(new Error('OpenCV.js loaded but window.cv is undefined'));
+          settleReject(new Error('OpenCV.js loaded but window.cv is undefined'));
         }
       };
 
       if (existing) {
-        onReady();
-        return;
+        // A <script> tag already exists from an earlier call — but it may
+        // still be mid-download, not necessarily finished. Calling
+        // onReady() immediately would wrongly reject with "window.cv is
+        // undefined" just because the network request hasn't completed
+        // yet. Only treat it as ready if window.cv is already there;
+        // otherwise wait for its own load event like a fresh script would.
+        if (window.cv) {
+          onReady();
+        } else {
+          existing.addEventListener('load', onReady, { once: true });
+          existing.addEventListener('error', () => {
+            settleReject(new Error(`Failed to load OpenCV.js from ${this.scriptUrl}`));
+          }, { once: true });
+        }
+      } else {
+
+        const script = document.createElement('script');
+        script.src = this.scriptUrl;
+        script.async = true;
+
+        script.onload = onReady;
+
+        script.onerror = () => {
+          settleReject(new Error(`Failed to load OpenCV.js from ${this.scriptUrl}`));
+        };
+
+        document.body.appendChild(script);
       }
 
-      const script = document.createElement('script');
-      script.src = this.scriptUrl;
-      script.async = true;
-
-      script.onload = onReady;
-
-      script.onerror = () => {
-        this.loadingPromise = null;
-        reject(new Error(`Failed to load OpenCV.js from ${this.scriptUrl}`));
-      };
-
-      document.body.appendChild(script);
-
       // Safety timeout — if OpenCV.js isn't present (dev environment missing the
-      // asset), fail fast so callers can fall back to manual-only cropping
-      // instead of hanging the UI forever.
+      // asset) or initialization otherwise never completes, fail fast so callers
+      // fall back to manual-only cropping instead of hanging the UI forever.
       setTimeout(() => {
-        if (!(window.cv && window.cv.Mat)) {
-          this.loadingPromise = null;
-          reject(new Error('OpenCV.js initialization timed out'));
-        }
+        settleReject(new Error('OpenCV.js initialization timed out'));
       }, 12000);
     });
 

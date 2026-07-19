@@ -1,4 +1,4 @@
-<ion-content class="scanner-content" [class.scanner-content--dark]="true" [fullscreen]="true">
+<ion-content class="scanner-content" [class.scanner-content--dark]="true" [fullscreen]="true" [scrollY]="false">
 
   <!-- TOP TOOLBAR -->
   <div class="scanner-topbar">
@@ -67,6 +67,11 @@
   <!-- ================= STEP: CROP / CORNERS ================= -->
   <div class="step-crop" *ngIf="step === 'crop' && activePage as page">
 
+    <div class="detection-hint" *ngIf="page.detected === false">
+      <ion-icon name="information-circle-outline"></ion-icon>
+      <span>Couldn't auto-detect the document edges — drag the corners to match.</span>
+    </div>
+
     <div class="crop-stage">
       <app-scan-corner-overlay
         [imageUrl]="page.rawDataUrl"
@@ -81,6 +86,11 @@
       <ion-button fill="clear" class="footer-btn" (click)="retakeCurrentPage()">
         <ion-icon name="camera-reverse-outline" slot="start"></ion-icon>
         Retake
+      </ion-button>
+
+      <ion-button fill="clear" class="footer-btn footer-btn--danger" (click)="deleteActivePage()">
+        <ion-icon name="trash-outline" slot="start"></ion-icon>
+        Delete
       </ion-button>
 
       <ion-button class="glass-btn glass-btn--primary" (click)="confirmCrop()">
@@ -106,6 +116,9 @@
         </button>
         <button class="quick-action" [class.quick-action--active]="showAdjustSliders" (click)="toggleAdjustSliders()">
           <ion-icon name="options-outline"></ion-icon>
+        </button>
+        <button class="quick-action quick-action--danger" (click)="deleteActivePage()">
+          <ion-icon name="trash-outline"></ion-icon>
         </button>
       </div>
     </div>
