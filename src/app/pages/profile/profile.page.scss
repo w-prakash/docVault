@@ -202,6 +202,56 @@
   margin-bottom: 16px;
 }
 
+.drive-storage-card {
+  padding-bottom: 18px;
+}
+
+.drive-storage-subtitle {
+  margin: 2px 0 16px;
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.4;
+}
+
+.drive-bar-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+
+.drive-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  transition: width 0.6s ease;
+}
+
+.drive-bar-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.65);
+  font-weight: 600;
+}
+
+.drive-storage-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 2px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+
+  ion-icon {
+    font-size: 16px;
+    flex: 0 0 auto;
+  }
+}
+
 .storage-top {
   display: flex;
   align-items: center;

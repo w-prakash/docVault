@@ -11,6 +11,7 @@ import { UserProfile, UserService } from '../../services/user.service';
 import { OfflineVaultService } from '../../services/offline-vault.service';
 import { VaultService } from '../../services/vault.service';
 import { GoogleAuthService } from '../../core/google/auth/google-auth.service';
+import { GoogleDriveService } from '../../core/google/drive/google-drive.service';
 import { NotificationService } from '../../services/notification.service';
 import { NotificationCenterComponent } from '../../components/notifications/notification-center.component';
 
@@ -51,6 +52,21 @@ export class ProfilePage implements OnInit, OnDestroy {
   usedBytes = 0;
   freeBytes = STORAGE_QUOTA_BYTES;
   usedPercent = 0;
+  // The real denominator used for freeBytes/usedPercent below — defaults
+  // to the 15 GB free-tier allowance, but may be lower if the device/
+  // browser reports a smaller real storage quota. The template must
+  // read this instead of hardcoding "15 GB", or the label and the actual
+  // free-space figure can silently disagree (e.g. "Used of 15 GB" next
+  // to a free-space number computed against a 10 GB real quota).
+  quotaBytes = STORAGE_QUOTA_BYTES;
+
+  // Google Drive storage (real account quota — shared across Gmail/Photos/
+  // Drive, NOT the same thing as the device-storage card above)
+  isLoadingDriveStorage = true;
+  driveStorageAvailable = false;
+  driveUsedBytes: number | null = null;
+  driveLimitBytes: number | null = null; // null = unlimited plan, not an error
+  driveUsedPercent = 0;
 
   // Ring geometry
   readonly ringRadius = 70;
@@ -71,6 +87,7 @@ export class ProfilePage implements OnInit, OnDestroy {
     private offlineVault: OfflineVaultService,
     private vaultService: VaultService,
     private googleAuthService: GoogleAuthService,
+    private driveService: GoogleDriveService,
     private notificationService: NotificationService,
     private modalCtrl: ModalController,
     private alertCtrl: AlertController,
@@ -91,6 +108,7 @@ export class ProfilePage implements OnInit, OnDestroy {
       .subscribe(count => (this.unreadNotifications = count));
 
     this.loadStorageOverview();
+    this.loadDriveStorageOverview();
     this.loadMemberSince();
     this.detectRegion();
     this.buildQuickActions();
@@ -98,6 +116,7 @@ export class ProfilePage implements OnInit, OnDestroy {
 
   ionViewWillEnter() {
     this.loadStorageOverview();
+    this.loadDriveStorageOverview();
   }
 
   ngOnDestroy() {
@@ -150,6 +169,7 @@ export class ProfilePage implements OnInit, OnDestroy {
         // Storage API unavailable — keep the free-tier fallback
       }
 
+      this.quotaBytes = quota;
       this.freeBytes = Math.max(quota - this.usedBytes, 0);
       this.usedPercent = quota > 0 ? Math.min((this.usedBytes / quota) * 100, 100) : 0;
       this.ringOffset = this.ringCircumference * (1 - this.usedPercent / 100);
@@ -158,6 +178,42 @@ export class ProfilePage implements OnInit, OnDestroy {
       console.error('❌ Failed to load storage overview', e);
     } finally {
       this.isLoadingStorage = false;
+    }
+  }
+
+  /**
+   * Real Google account storage — shared across Gmail/Photos/Drive, fetched
+   * live from Drive's `about` endpoint. Deliberately kept separate from
+   * loadStorageOverview() above: that one is on-device cache, this one is
+   * the actual cloud quota, and conflating them is exactly the confusion
+   * that led to the earlier "Used of 15 GB" mislabeling.
+   */
+  private async loadDriveStorageOverview() {
+
+    this.isLoadingDriveStorage = true;
+
+    try {
+
+      const quota = await this.driveService.getStorageQuota();
+
+      this.driveUsedBytes = quota.usedBytes;
+      this.driveLimitBytes = quota.limitBytes;
+
+      this.driveStorageAvailable = quota.usedBytes !== null;
+
+      this.driveUsedPercent =
+        quota.usedBytes !== null && quota.limitBytes
+          ? Math.min((quota.usedBytes / quota.limitBytes) * 100, 100)
+          : 0;
+
+    } catch (e) {
+
+      console.error('❌ Failed to load Drive storage overview', e);
+      this.driveStorageAvailable = false;
+
+    } finally {
+
+      this.isLoadingDriveStorage = false;
     }
   }
 

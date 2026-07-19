@@ -91,6 +91,42 @@ export class GoogleDriveService {
     return this.get('/about', { fields: 'storageQuota' });
   }
 
+  /**
+   * Parsed, safe-to-render version of getAbout(). Google's quota fields
+   * come back as decimal strings (and `limit` is entirely absent for
+   * unlimited Workspace plans), so this is the one place that turns
+   * them into numbers (or null when unavailable/offline) — callers
+   * should use this instead of parsing storageQuota themselves.
+   */
+  async getStorageQuota(): Promise<{
+    usedBytes: number | null;
+    limitBytes: number | null;
+    usageInDriveBytes: number | null;
+  }> {
+
+    if (!navigator.onLine) {
+      return { usedBytes: null, limitBytes: null, usageInDriveBytes: null };
+    }
+
+    try {
+
+      const about = await this.getAbout();
+      const q = about.storageQuota;
+
+      return {
+        usedBytes: q?.usage ? parseInt(q.usage, 10) : null,
+        // Absent for unlimited-storage Workspace accounts — not an error.
+        limitBytes: q?.limit ? parseInt(q.limit, 10) : null,
+        usageInDriveBytes: q?.usageInDrive ? parseInt(q.usageInDrive, 10) : null,
+      };
+
+    } catch (e) {
+
+      console.warn('⚠️ Could not fetch Drive storage quota', e);
+      return { usedBytes: null, limitBytes: null, usageInDriveBytes: null };
+    }
+  }
+
   uploadMultipart(
     file: Blob,
     metadata: DriveUploadMetadata,

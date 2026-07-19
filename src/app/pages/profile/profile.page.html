@@ -60,7 +60,7 @@
     <!-- STORAGE OVERVIEW -->
     <div class="glass-card storage-card">
 
-      <div class="section-title">Storage Overview</div>
+      <div class="section-title">Device Storage</div>
 
       <div class="storage-top">
 
@@ -76,7 +76,7 @@
           </svg>
           <div class="ring-center">
             <h3>{{ isLoadingStorage ? '—' : formatBytes(usedBytes) }}</h3>
-            <p>Used of 15 GB</p>
+            <p>Used of {{ isLoadingStorage ? '...' : formatBytes(quotaBytes) }}</p>
           </div>
         </div>
 
@@ -129,6 +129,38 @@
         </div>
         <ion-icon name="chevron-forward" class="row-chevron"></ion-icon>
       </div>
+
+    </div>
+
+    <!-- GOOGLE DRIVE STORAGE (real account quota — separate from device cache above) -->
+    <div class="glass-card storage-card drive-storage-card">
+
+      <div class="section-title">Google Drive Storage</div>
+      <p class="drive-storage-subtitle">Your Google account quota — shared across Gmail, Photos &amp; Drive</p>
+
+      <ng-container *ngIf="!isLoadingDriveStorage && driveStorageAvailable; else driveUnavailable">
+
+        <div class="drive-bar-track">
+          <div class="drive-bar-fill" [style.width.%]="driveUsedPercent"></div>
+        </div>
+
+        <div class="drive-bar-labels">
+          <span>{{ formatBytes(driveUsedBytes || 0) }} used</span>
+          <span>{{ driveLimitBytes ? formatBytes(driveLimitBytes) + ' total' : 'Unlimited plan' }}</span>
+        </div>
+
+      </ng-container>
+
+      <ng-template #driveUnavailable>
+        <div class="drive-storage-unavailable">
+          <ion-icon [name]="isLoadingDriveStorage ? 'time-outline' : 'cloud-offline-outline'"></ion-icon>
+          <span>
+            {{ isLoadingDriveStorage
+              ? 'Checking your Google Drive storage…'
+              : 'Drive storage unavailable — check your connection' }}
+          </span>
+        </div>
+      </ng-template>
 
     </div>
 

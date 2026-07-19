@@ -94,24 +94,8 @@ export class ReportsService {
 
   /** Returns null (not 0) when unavailable — offline, or the account API call failed — so the UI can show "unavailable" instead of a misleading zero. */
   private async getDriveStorageUsage(): Promise<number | null> {
-
-    if (!navigator.onLine) {
-      return null;
-    }
-
-    try {
-
-      const about = await this.driveService.getAbout();
-      const usage = about.storageQuota?.usage;
-
-      return usage ? parseInt(usage, 10) : null;
-
-    } catch (e) {
-
-      console.warn('⚠️ Could not fetch Drive storage usage', e);
-      return null;
-
-    }
+    const quota = await this.driveService.getStorageQuota();
+    return quota.usedBytes;
   }
 
 }
