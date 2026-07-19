@@ -168,6 +168,48 @@ notifications:
       .toArray();
   }
   // =====================================
+// DELETE CACHED FILE (+ thumbnail)
+// Removes the encrypted vault file and its thumbnail for ONE document.
+// Used when a document is deleted so it stops being counted by
+// getLocalStorageUsage()/getLocalStorageBreakdown() — without this, the
+// storage total stays stale (still shows the old size) forever, since
+// those functions read whatever is actually left on disk.
+// =====================================
+
+async deleteCachedFile(fileName: string | null | undefined): Promise<void> {
+
+  if (!fileName) {
+    return;
+  }
+
+  try {
+
+    await Filesystem.deleteFile({
+      path: `vault/${fileName}`,
+      directory: Directory.Data
+    });
+
+    console.log('🗑️ Cached file deleted', fileName);
+
+  } catch {
+    // already gone / never cached locally - fine
+  }
+
+  try {
+
+    await Filesystem.deleteFile({
+      path: `thumbnails/${fileName}.thumb`,
+      directory: Directory.Data
+    });
+
+    console.log('🗑️ Cached thumbnail deleted', fileName);
+
+  } catch {
+    // no thumbnail was ever generated for this file - fine
+  }
+}
+
+// =====================================
 // SAVE ENCRYPTED FILE
 // =====================================
 
@@ -466,6 +508,81 @@ async markSyncJobFailed(
 }
 
 // =====================================
+// RECONCILE CACHE (self-heal orphaned files)
+// Deletes any vault/thumbnail file on disk that isn't referenced by a
+// current document row. This is what actually cleans up files left
+// behind by OLDER installs (from before per-document delete removed its
+// own cached file) — deleting a document going forward no longer leaves
+// an orphan, but this sweep is what fixes ones that already exist.
+// Runs automatically before every storage read, so the numbers are
+// always self-correcting without the user having to hit "Clear Cache"
+// (which would also wipe cache for documents that are still valid).
+// =====================================
+
+private async reconcileLocalFileCache(): Promise<void> {
+
+  try {
+
+    const docs = await this.documents.toArray();
+
+    const validVaultNames = new Set<string>();
+    const validThumbNames = new Set<string>();
+
+    for (const doc of docs) {
+
+      const fileName =
+        doc.local_file_name ||
+        doc.file_url?.split('/')?.pop();
+
+      if (fileName) {
+        validVaultNames.add(fileName);
+        validThumbNames.add(`${fileName}.thumb`);
+      }
+    }
+
+    await this.removeOrphanedFiles('vault', validVaultNames);
+    await this.removeOrphanedFiles('thumbnails', validThumbNames);
+
+  } catch (e) {
+    console.warn('⚠️ Cache reconciliation failed', e);
+  }
+}
+
+private async removeOrphanedFiles(dir: string, validNames: Set<string>): Promise<void> {
+
+  try {
+
+    const result =
+      await Filesystem.readdir({
+        path: dir,
+        directory: Directory.Data
+      });
+
+    for (const file of result.files) {
+
+      if (file.type === 'file' && !validNames.has(file.name)) {
+
+        try {
+
+          await Filesystem.deleteFile({
+            path: `${dir}/${file.name}`,
+            directory: Directory.Data
+          });
+
+          console.log('🧹 Removed orphaned cache file', `${dir}/${file.name}`);
+
+        } catch {
+          // best-effort — if it can't be removed now, next sweep will retry
+        }
+      }
+    }
+
+  } catch {
+    // directory doesn't exist - nothing to reconcile
+  }
+}
+
+// =====================================
 // STORAGE USED (Phase 10)
 // =====================================
 
@@ -474,6 +591,8 @@ async getLocalStorageUsage(): Promise<{
   cachedFileCount: number;
   totalBytes: number;
 }> {
+
+  await this.reconcileLocalFileCache();
 
   const documentCount =
     await this.documents.count();
@@ -524,6 +643,8 @@ async getLocalStorageBreakdown(): Promise<{
   cachedFileCount: number;
   cachedBytes: number;
 }> {
+
+  await this.reconcileLocalFileCache();
 
   const documentRecordCount =
     await this.documents.count();

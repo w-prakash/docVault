@@ -61,6 +61,17 @@ export class SettingsPage implements OnInit {
     this.loadAppInfo();
   }
 
+  /**
+   * Ionic's IonicRouteStrategy keeps page instances alive and reuses them,
+   * so ngOnInit only ever runs once. Without this, deleting/updating a
+   * document elsewhere in the app wouldn't be reflected here until the
+   * app was fully restarted — the numbers would just look permanently
+   * stale even though the underlying cache was already cleaned up.
+   */
+  ionViewWillEnter() {
+    this.loadStorageUsage();
+  }
+
   goToProfile() {
     this.router.navigateByUrl('/profile');
   }

@@ -2116,8 +2116,17 @@ private async blobToBase64String(
    * (one toast per action, not one per document).
    */
   private async removeDocumentEverywhere(doc: DocumentItem): Promise<void> {
+    // Resolve the on-disk filename BEFORE the Dexie row is gone — same
+    // fallback used everywhere else this filename is derived.
+    const cachedFileName = doc.local_file_name || doc.file_url?.split('/')?.pop() || null;
+
     // Always remove from Dexie first (works offline too)
     await this.offlineVault.documents.delete(doc.id);
+
+    // Free the actual disk space this document was using — without this
+    // the cached encrypted file + thumbnail are orphaned forever, and
+    // Settings → Storage keeps reporting the old (now-deleted) size.
+    await this.offlineVault.deleteCachedFile(cachedFileName);
 
     const serverId = doc.server_id || (doc as any).id;
 
